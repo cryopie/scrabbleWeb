@@ -20,13 +20,12 @@ function lookupName(adddressBook, name) {
     return null;
 }
 
-function setName(addressBook, name, email) {
+function setName(addressBook, name) {
     var entry = lookupName(addressBook, name);
     if (entry) {
         entry.name = name;
-        entry.email = email;
     } else {
-        addressBook.push({ name: name, email: email });
+        addressBook.push({ name: name });
     }
 }
 
@@ -39,9 +38,6 @@ $(document).ready(function() {
         })
         .blur(function() {
             var entry = lookupName(addressBook, $(this).val());
-            if (entry) {
-                $(this).siblings('input').val(entry.email);
-            }
         });
     
     $('form').on('submit', function(event) {
@@ -52,22 +48,8 @@ $(document).ready(function() {
         for (var index = 0; index < 4; index++) {
             var namePath = 'input[name=name' + index +']';
             var name = $(namePath).val();
-            var emailPath = 'input[name=email' + index +']';
-            var email = $(emailPath).val();
-            if (!firstEmptyPath && !name) {
-                firstEmptyPath = namePath;
-            }
-            if (!firstEmptyPath && !email) {
-                firstEmptyPath = emailPath;
-            }
-            if (name && !email) {
-                $(emailPath).focus();
-                value = false;
-            } else if (email && !name) {
-                $(namePath).focus();
-                value = false;
-            } else if (name && email) {
-                setName(addressBook, name, email);
+            if (name) {
+                setName(addressBook, name);
                 playerCount++;
                 if (_.contains(playerNames, name)) {
                     return false;
