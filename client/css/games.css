@@ -1,0 +1,112 @@
+.floatLeft {
+    float: left;
+    display: inline-block;
+}
+
+.floatRight {
+    float: right;
+    display: inline-block;
+    margin-right: 2em;
+}
+
+.container {
+    overflow: hidden;
+}
+
+.linkE, .linkD {
+  padding: 4px 12px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.linkE:not(.hasTurn), .linkD:not(.hasTurn) {
+  color: black;
+}
+
+.hasTurn{
+  color: #c21d1d; 
+}
+
+.linkE:hover, .linkE:active {
+  background-color: #59372E;
+  color: white;
+}
+
+.linkD:hover, .linkD:active {
+  cursor: default;
+}
+
+
+.tooltip .tooltiptext {
+  visibility: hidden;
+  background-color: black;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 10px;
+
+  position: absolute;
+  z-index: 1;
+}
+
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+  display: inline-block;
+}
+
+
+table#gameList, table#userList {
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: center;
+  display: inline-block;
+}
+
+table#gameList td, table#gameList th, table#userList td, table#userList th{
+  border: 1px solid #ddd;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  padding: 3px;
+  font-weight: bold;
+  text-align: center;
+}
+
+table#gameList th:not(.parser-false), table#userList th:not(.parser-false) {
+  cursor: pointer;
+}
+
+table#gameList th, table#userList th {
+  background-color: #59372E;
+  color: white;
+}
+
+table#gameList tr#hiddenGame {
+    background-color: #786966;
+}
+
+table .finishedGame {
+    background-color: #6b9169;
+}
+
+table .pausedGame {
+    background-color: #78abc2;
+}
+
+#userListHdr {
+    width: 300px;
+    max-width: 300px;
+    min-width: 300px;
+}
+
+#gameListHdr {
+    width: 900px;
+    max-width: 900px;
+    min-width: 900px;
+}
+
+#me {
+    background-color: #3b2e2b;
+    color: white;
+}

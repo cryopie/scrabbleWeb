@@ -6,13 +6,16 @@
 
     <title>Select Game &amp; Player</title>
 
-    <!-- link rel="stylesheet" href="css/common.css" media="all" / -->
     <style type="text/css" media="all">
       @import "css/common.css";
     </style>
-    <!-- link rel="stylesheet" href="css/page.css" media="all" / -->
+    
     <style type="text/css" media="all">
       @import "css/page.css";
+    </style>
+
+    <style type="text/css" media="all">
+      @import "css/games.css";
     </style>
 
     <link rel="stylesheet" href="css/jquery-ui.css" type="text/css" media="all" />
@@ -20,15 +23,28 @@
 
     <script type="text/javascript" src="javascript/MochiKit/MochiKit.js"></script>
     <script type="text/javascript" src="javascript/underscore.js"></script>
-    <script type="text/javascript" src="javascript/jquery-1.7.2.js"></script>
+    <script type="text/javascript" src="javascript/jquery-1.7.2.js"></script> 
     <script type="text/javascript" src="javascript/jquery-ui-1.8.21.custom.min.js"></script>
+    <script type="text/javascript" src="javascript/jquery.tablesorter.js"></script>
+    <script type="text/javascript" src="javascript/users.js"></script>
     <script type="text/javascript" src="javascript/games.js"></script>
   </head>
   <body>
-    <fieldset>
-      <legend>Choose a game and player to play</legend>
-      <table>
-      </table>
-    </fieldset>
+    <div id="container">
+        <fieldset>
+        <h4>
+            <a href="/" id="title" class="linkE">Home</a> | &nbsp;
+            <a href="/make-game.html" class="linkE">Create New Game</a> | &nbsp;
+            <a href="#" id="finishedGames" class="linkE">Show finished games</a>
+            <span class="floatRight" id="userName"></span>
+        </h4>
+        <div class="floatLeft">
+            <table id="gameList" class="tablesorter"></table>
+        </div>
+        <div class="floatRight">
+            <table id="userList" class="tablesorter"></table>
+        </div>
+        </fieldset>
+    </div>
   </body>
 </html>

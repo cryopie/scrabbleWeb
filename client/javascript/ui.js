@@ -17,6 +17,7 @@ function joinProse(array)
 }
 
 var PrototypeMap = { Board: Board, Tile: Tile, Square: Square, Rack: Rack };
+var PlayerColors = {0: "#C63228", 1: "#1E9433", 2: "#1E3794", 3: "#941E88"};
 
 function UI(game) {
     // constructor
@@ -28,7 +29,7 @@ function UI(game) {
     } else {
         console.log('cannot parse url');
     }
-
+  
     var ui = this;
 
     $.get('/game/' + this.gameKey, function (gameData, err) {
@@ -43,6 +44,8 @@ function UI(game) {
         ui.players = gameData.players;
         ui.keyboardPlacements = [];
         ui.remainingTileCounts  = gameData.remainingTileCounts;
+        ui.gamePaused = false;
+        ui.gameFinished = gameData.finished;
 
         var playerNumber = 0;
         $('#scoreboard')
@@ -63,10 +66,12 @@ function UI(game) {
                               }
                               playerNumber++;
                               return TR({ 'class': 'player' + (playerNumber - 1) }, /* ieh */
-                                        TD({ 'class': 'name' }, player.rack ? "You" : player.name),
+                                        player.nameElement = TD({ 'class': 'name'}, player.rack ? "You" : player.name),
                                         TD({ 'class': 'remainingTiles' }, ''),
                                         TD({ 'class': 'status offline' }, '\u25cf'),
-                                        player.scoreElement = TD({ 'class': 'score' }, player.score));
+                                        player.scoreElement = TD({ 'class': 'score' }, player.score),
+                                        player.durationElement = TD({ 'class': 'duration' }, "")
+                              );
                           })))
             .append(DIV({ id: 'letterbagStatus' }));
 
@@ -74,6 +79,50 @@ function UI(game) {
         if (ui.rack) {
             ui.drawRack();
             ui.drawSwapRack();
+        }
+
+        // Update chat history
+        if (gameData.chatHistory != null) {
+            gameData.chatHistory.forEach(function(message) {
+                onChatMessage(message, false);
+            })
+        }
+
+        // Start game and turn timers
+        if (gameData.turns.length == 0) { 
+          if (gameData.whosTurn == ui.playerNumber) { 
+            ui.gameTime = 0;
+            ui.turnTime = 0;
+          } else {
+            ui.gameTime = -1;
+            ui.turnTime = -1;
+          }
+        } else {
+          ui.gameTime = (gameData.gameDuration == null ? -1 : gameData.gameDuration);
+          if (ui.gameFinished) {
+            ui.turnTime = -1;
+          } else {
+            ui.turnTime = (Date.now() - gameData.turns[gameData.turns.length - 1].endtime);
+            ui.turnTime -= gameData.pauseDuration == null ? 0 : gameData.pauseDuration;
+          }
+          gameData.pauseDuration = 0;
+          ui.gameTime += ui.turnTime;
+        }
+        ui.runClock();
+        $("#pauseGame").click(ui.pauseGame);
+
+        function onChatMessage(message, playSound) {
+            var player_names = ui.players.map(function(player) { return player.name;})
+            var color = PlayerColors[player_names.indexOf(message.name)] || "black";
+            $('#chatLog')
+                .append(DIV(null,
+                            SPAN({'class': 'name', 'style': 'color: '+color}, message.name),
+                            ': ',
+                            message.text))
+                .animate({ scrollTop: $('#chatLog').prop('scrollHeight') }, 2);
+            if (message.name != ui.thisPlayer.name) {
+                ui.notify(message.name + " says", message.text);
+            }
         }
 
         function scrollLogToEnd(speed) {
@@ -84,8 +133,9 @@ function UI(game) {
             player = ui.players[turn.player];
             var div = DIV({ 'class': 'moveScore' },
                           DIV({ 'class': 'score' },
-                              SPAN({ 'class': 'playerName' }, player.name),
-                              SPAN({ 'class': 'score' }, turn.score)));
+                            [player.name, "Score: " + turn.score, humanDuration(turn.duration)].join(" | ")
+                          )
+                        );
             switch (turn.type) {
             case 'move':
                 turn.move.words.forEach(function (word) {
@@ -95,7 +145,7 @@ function UI(game) {
                 });
                 if (turn.move.allTilesBonus) {
                     $(div).append(DIV({ 'class': 'moveDetail' },
-                                      SPAN({ 'class': 'word' }, "All tiles placed bonus"),
+                                      SPAN({ 'class': 'word' }, "Bingo bonus"),
                                       SPAN({ 'class': 'score' }, 50)));
                 }
                 break;
@@ -121,6 +171,12 @@ function UI(game) {
             player = ui.players[turn.player];
             player.score += turn.score;
             $(player.scoreElement).text(player.score);
+        }
+        
+        function updateClockAndDuration(turn, playerDuration, gameDuration) {
+            ui.turnTime = 0;
+            ui.players[turn.player].duration = playerDuration;
+            ui.gameTime = gameDuration;
         }
 
         function displayNextGameMessage(nextGameKey) {
@@ -212,6 +268,7 @@ function UI(game) {
         scrollLogToEnd(0);
 
         var yourTurn = gameData.whosTurn == ui.playerNumber;
+        ui.whosTurn = gameData.whosTurn;
         displayWhosTurn(gameData.whosTurn);
         ui.boardLocked(!yourTurn);
 
@@ -223,14 +280,12 @@ function UI(game) {
             if (yourTurn) {
                 ui.addChallengeButton();
             } else if (lastTurn.player == ui.playerNumber) {
-                ui.addTakeBackMoveButton();
+                // Disable the "Take back move" button
+                // ui.addTakeBackMoveButton();
             }
         }
 
         var transports = ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling'];
-        if (BrowserDetect.browser == 'Firefox') {
-            transports = ['htmlfile', 'xhr-polling', 'jsonp-polling'];
-        }
         
         ui.socket = io.connect(null, { transports: transports });
         ui.socket
@@ -249,11 +304,13 @@ function UI(game) {
                 console.log('socket disconnect');
                 $.blockUI({ message: '<h1>Server unavailable, please wait</h1>' });
             })
-            .on('turn', function (turn) {
+            .on('turn', function (data) {
+                turn = data.turn;
                 console.log('turn', turn);
                 appendTurnToLog(turn);
                 scrollLogToEnd(300);
                 processMoveScore(turn);
+                updateClockAndDuration(turn, data.playerDuration, data.gameDuration); 
                 // If this has been a move by another player, place tiles on board
                 if (turn.type == 'move' && turn.player != ui.playerNumber) {
                     placeTurnTiles(turn);
@@ -300,13 +357,15 @@ function UI(game) {
                 ui.remainingTileCounts = turn.remainingTileCounts;
                 if (turn.whosTurn == ui.playerNumber) {
                     ui.playAudio("yourturn");
-                }
+                } 
+                ui.whosTurn = turn.whosTurn;
                 ui.boardLocked(turn.whosTurn != ui.playerNumber);
                 ui.removeMoveEditButtons();
                 if (typeof turn.whosTurn == 'number' && turn.type != 'challenge') {
                     displayWhosTurn(turn.whosTurn);
                     if (turn.type == 'move' && turn.player == ui.playerNumber) {
-                        ui.addTakeBackMoveButton();
+                        // Disable take back move
+                        //ui.addTakeBackMoveButton();
                     }
                     if (turn.whosTurn == ui.playerNumber && turn.type != 'takeBack') {
                         ui.notify('Your turn!', ui.players[turn.player].name + ' has made a move and now it is your turn.');
@@ -326,20 +385,25 @@ function UI(game) {
                 displayNextGameMessage(nextGameKey);
             })
             .on('message', function (message) {
-                $('#chatLog')
-                    .append(DIV(null,
-                                SPAN({ 'class': 'name' }, message.name),
-                                ': ',
-                                message.text))
-                    .animate({ scrollTop: $('#log').prop('scrollHeight') }, 100);
-                if (message.name != ui.thisPlayer.name) {
-                    ui.notify(message.name + " says", message.text);
-                }
+                onChatMessage(message, true);
             })
             .on('join', function(playerNumber) {
                 $('tr.player' + playerNumber + ' td.status')
                     .removeClass('offline')
                     .addClass('online');
+            })
+            .on('pause', function(data) {
+                console.log("Game paused");
+                ui.gamePaused = true;
+                pausedBy = (data.pausedBy == ui.thisPlayer.name ? "me" : data.pausedBy);
+                $("#questionText").text("Game paused by " + pausedBy + ". Please wait or exit.");
+                $.blockUI({message: $("#question"), css: { width: '300px'} });
+                $("#exitPaused").click(function() { location.href="/"; });
+                $("#resumePaused").click(function() { location.reload(); });
+            })
+            .on('resume', function(data) {
+                console.log("Game resumed");
+                location.reload();
             })
             .on('leave', function(playerNumber) {
                 $('tr.player' + playerNumber + ' td.status')
@@ -490,6 +554,37 @@ function UI(game) {
         });
 }
 
+UI.prototype.runClock = function() {
+    if (ui.gameTime >= 0) { 
+      ui.gameTime += 1000;
+    }
+    $("#gameTime").text("Game: " + humanDuration(ui.gameTime));
+    if (ui.turnTime >= 0) {
+      ui.turnTime += 1000;
+    }
+    $("#turnTime").text("Turn: " + humanDuration(ui.turnTime));
+    for (i = 0; i < ui.players.length; i++) {
+      var player = ui.players[i];
+      playerDuration = player.duration + (i == ui.whosTurn ? ui.turnTime : 0);
+      $(player.durationElement).text(humanDuration(playerDuration));
+      $(player.nameElement).css({
+        'color': PlayerColors[i],
+        'font-weight': (i == ui.whosTurn? '700' : 'normal')
+      })
+    }
+    if (ui.gamePaused || ui.gameFinished) {
+      return;
+    }
+    setTimeout(ui.runClock, 1000);
+}
+
+UI.prototype.pauseGame = function() {
+  ui.sendMoveToServer('pauseGame', {}, function(data, textStatus, jqXHR) {
+    $.blockUI("Game paused by you. Click to resume or close tab to exit.");
+    $('.blockOverlay').attr('title','Click to resume').click(location.reload());
+  });
+}
+
 UI.prototype.displayRemainingTileCounts = function() {
     var counts = this.remainingTileCounts;
     if (counts.letterBag > 0) {
@@ -564,7 +659,7 @@ UI.prototype.clearCursor = function() {
 
 UI.prototype.updateBoardSquare = function(square) {
     var div = DIV({ id: square.id });
-    var ui = this;                                          // we're creating a bunch of callbacks below that close over the UI object
+    var ui = this;            // we're creating a bunch of callbacks below that close over the UI object
 
     if (square.tile) {
         $(div).addClass('Tile');
@@ -733,7 +828,7 @@ UI.prototype.updateRackSquare = function(square) {
     var a = document.createElement('a');
     div.appendChild(a);
 
-    var ui = this;                                          // we're creating a bunch of callbacks below that close over the UI object
+    var ui = this; // we're creating a bunch of callbacks below that close over the UI object
 
     if (square.tile) {
         $(div).addClass('Tile');
@@ -925,7 +1020,7 @@ UI.prototype.moveTile = function(fromSquare, toSquare) {
     }
     toSquare.placeTile(tile);
     toSquare.owner.tileCount++;
-    if (!this.boardLocked()) {
+    if (!this.boardLocked() && !ui.gamePaused) {
         setTimeout(function () { ui.updateGameStatus() }, 100);
     }
 };

@@ -35,32 +35,38 @@
     <script type="text/javascript" src="/javascript/MochiKit/MochiKit.js"></script>
     <script type="text/javascript" src="/javascript/underscore.js"></script>
     <script type="text/javascript" src="/socket.io/socket.io.js"></script>
-
     <script type="text/javascript" src="javascript/jquery-1.7.2.js"></script>
-    
     <script type="text/javascript" src="javascript/jquery.cookie.js"></script>
     <script type="text/javascript" src="javascript/jquery.blockUI.js"></script>
-    
     <script type="text/javascript" src="javascript/jquery-css-transform.js"></script>
     <script type="text/javascript" src="javascript/jquery-animate-css-rotate-scale.js"></script>
-
     <script type="text/javascript" src="javascript/jquery-ui-1.8.21.custom.min.js"></script>
-    
     <script type="text/javascript" src="javascript/browserDetect.js"></script>
-
+    <script type="text/javascript" src="javascript/users.js"></script>
     <script type="text/javascript" src="javascript/icebox.js"></script>
     <script type="text/javascript" src="javascript/scrabble.js"></script>
     <script type="text/javascript" src="javascript/ui.js"></script>
-    
     <script type="text/javascript" src="javascript/game.js"></script>
+    <script type="text/javascript" src="javascript/wordlists.js"></script>
     <style type="text/css" media="all">.cnotie {display: block}</style>
   </head>
   <body id="body">
     <audio id="yourturn" src="audio/yourturn.wav" preload="auto" type="audio/wav"></audio>
     <audio id="applause" src="audio/applause.wav" preload="auto" type="audio/wav"></audio>
-
+    
     <div id="container">
       <div id="controls">
+        <div id="actions">
+            <a href="/">Home</a>
+            <button class="buttE" id="pauseGame">Pause</button>
+            <span id="whosturn"></span>
+        </div>
+        <div id="clock">
+            <b>
+                <span id="gameTime"></span> 
+                <span id="turnTime" style="float: right"></span>
+            </b>
+        </div>
         <div id="log"></div>
         <div id="scoreboard"></div>
         <div id="chat">
@@ -71,7 +77,6 @@
             <input name="message"/>
           </div>
         </div>
-        <div id="whosturn"></div>
         <div id="turnControls">
           <div id="move"></div>
           <div id="swapRack" class="tableDivWrap bottomShade"></div>
@@ -83,11 +88,19 @@
         <div id="rack" class="tableDivWrap bottomShade"></div>
         <div id="letters" class="tableDivWrap" style="display:none;"></div>
       </div>
+      <div id="wordlists">
+        <table cellspacing="8px" cellpadding="2px"></table>
+      </div>
       <div id="blankLetterRequester">
           <button>Type blank's letter</button>
           or
           <div id="blankLetterRequesterSkip"><button>leave empty</button>
       </div>
     </div>
+    <div id="question" style="display:none; cursor: default"> 
+        <h3 id="questionText"></h3>
+        <button class="buttE" style="margin: 1em 1em 1em 1em" id="resumePaused">Resume</button> | 
+        <button class="buttE" style="margin: 1em 1em 1em 1em" id="exitPaused">Exit</button>
+    </div> 
   </body>
 </html>

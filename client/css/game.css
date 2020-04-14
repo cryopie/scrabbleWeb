@@ -1,4 +1,3 @@
-
 div.tableDivWrap
 {
     margin: 0;
@@ -15,9 +14,55 @@ div.bottomShade table
     box-shadow: 0 0 0.5em #000000;
 }
 
+.linkE, .linkD, .buttE {
+    color: black;
+    padding: 2px 3px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.buttE {
+    outline: 0 none;
+    border: none;
+    background: none;
+}
+
+.linkE:hover, .linkE:active, .buttE:hover, .buttE:active {
+    background-color: #59372E;
+    color: white;
+}
+
+span#whosturn {
+    color: black;
+    padding: 5px 3px;
+    text-align: center;
+    font-weight: bold;
+    display: inline-block;
+    float: right;
+}
+
+div#wordlists
+{
+    display: inline-block;
+    background-color: #F7F7E3;
+    border-color: #DCDCC6;
+    border-style: solid;
+    border-radius: 0.4em;
+    padding: 1em;
+
+    float: left;
+    width: 12em;
+    margin: 2em 1em 1em 1em;
+}
+
+div#wordlists table {
+    border: none;
+}
+
 div#container
 {
-    width: 59em;
+    width: 100%;
 }
 
 div#letterbagStatus > div
@@ -30,7 +75,7 @@ div#controls
     float: left;
     margin: 1em;
     margin-top: 2em;
-    width: 19.5em;
+    width: 20em;
 }
 
 div#controls > div
@@ -39,7 +84,7 @@ div#controls > div
     border-color: #DCDCC6;
 
     border-style: solid;
-	
+
     -webkit-border-radius: 0.4em;
     -moz-border-radius: 0.4em;
     -ms-border-radius: 0.4em;
@@ -57,6 +102,11 @@ div#log {
 
 div#log span.score {
     padding-left: 0.5em;
+
+}
+
+div#scoreboard td.score {
+    font-weight: bold;
 }
 
 div#log .moveDetail {
@@ -75,6 +125,10 @@ div#scoreboard {
     min-height: 4em;
 }
 
+div#scoreboard td {
+    padding: 1px 7px 1px 7px;
+}
+
 div#scoreboard td.online {
     color: green;
 }
@@ -91,8 +145,22 @@ div#move {
     margin-bottom: 0.5em;
 }
 
+div#actions a:link, div#actions a:visited {
+    color: black;
+    padding: 4px 12px;
+    text-align: center;
+    text-decoration: none;
+    font-weight: bold;
+    display: inline-block;
+}
+
+div#actions a:hover, div#actions a:active {
+    background-color: #59372E;
+    color: white;
+}
+
 div#chat {
-    height: 6em;
+    height: 16em;
 }
 
 div#chatLog {
@@ -101,7 +169,7 @@ div#chatLog {
     margin-left: 5%;
     border-width: 1em;
     width: 98%;
-    height: 4em;
+    height: 16em;
 }
 
 div#messageInput {
@@ -161,9 +229,10 @@ div#rackButtons {
 
 div#boardWrap
 {
+    margin-left: 1em;
     margin-top: 1em;
-    float: right;
-    width: 37em;
+    float: left;
+    width: 42em;
 }
 
 div.tableDivWrap table
@@ -177,9 +246,7 @@ div.tableDivWrap table
 
     margin-top: 1em;
     margin-bottom: 1em;
-
     padding: 0.2em;
-
     background-color: #AAA38E;
 }
 
@@ -373,7 +440,7 @@ div.tableDivWrap td div.Tile
     background-color: #F7F7E3;
     border-color: #DCDCC6;
     border-style: solid;
-	
+
     -webkit-border-radius: 0.2em;
     -moz-border-radius: 0.2em;
     -ms-border-radius: 0.2em;
@@ -436,7 +503,7 @@ div.tableDivWrap td div.Selected,
     -o-animation-iteration-count: infinite;
     -o-animation-direction: alternate;
     -o-animation-timing-function: linear;
-	
+
     animation-name: glow;
     animation-duration: 0.5s;
     animation-iteration-count: infinite;
@@ -484,10 +551,10 @@ div.tableDivWrap td div.Tile a span.BlankLetter
 
 @-moz-document url-prefix(http://)
 {
-	div.tableDivWrap td div.Tile a span.Letter,
-	div.tableDivWrap td div.Tile a span.BlankLetter
+    div.tableDivWrap td div.Tile a span.Letter,
+    div.tableDivWrap td div.Tile a span.BlankLetter
     {
-	    line-height: 1.8em;
+        line-height: 1.8em;
     }
 }
 

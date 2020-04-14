@@ -1,4 +1,4 @@
-config.json
+workdir/
 npm-debug.log
 node_modules
 *.db
