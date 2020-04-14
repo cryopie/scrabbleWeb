@@ -2,5 +2,5 @@
     "port": 9093,
     "usernameHeader": "X-WEBAUTH-USER",
     "adminUsers": "",
-    "title": ""
+    "title": "scrabbleWeb"
 }

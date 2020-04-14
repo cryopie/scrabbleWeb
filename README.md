@@ -1,29 +1,10 @@
-# Online multiplayer Scrabble with HTML/JavaScript UI
+# Self-hosted multiplayer web-based Scrabble
 
-## History
+This repository was cloned from https://github.com/hanshuebner/html-scrabble
 
-This repository contains the code for a multiplayer Scrabble game.  I
-have written it because my wife and I got increasingly frustrated by
-the sluggish Web 1.0 interface that http://thepixiepit.co.uk/
-provides.  Coming up with something better was on my To-Do-List for
-years, but I never found enough time to get a decent board UI
-implemented, and The Pixie Pit served us well enough through those
-years.
+### Features
 
-Much to my pleasure, I stumbled over
-http://code.google.com/p/html-scrabble/ one day, which implemented the
-interactive parts of a Scrabble board in a very nice manner.  The
-implementation was lacking the game logic and server parts, though, so
-I decided to fork the project and add the missing pieces.
-
-Little of the original board code is left now, but I owe the original
-author, Daniel Weck, lots of kudos for getting CSS and Drag&Drop under
-control.  Without his work, I'd not be able to get the game to run.  I
-also owe an apology for ripping his code apart and removing the
-dictionary functionality, as we are playing without a dictionary and
-want to keep it that way.
-
-## Features
+**From the original:**
 
 * Two to four players
 * Czech, English, Estonian, French, German, Hungarian and Dutch letter sets
@@ -40,7 +21,15 @@ want to keep it that way.
 * Uses node.js on the server
 * No database required, no deployment complexities
 
-## Limitations
+**Additions:**
+
+* Users log-in via a HTTP header from a reverse-proxy header, such as from nginx's auth\_basic or auth\_request.
+* Users can only play as their own users. No arbitrary players. Email feature removed.
+* Able to delete games and see finished games.
+* There are now clocks for the game, each player, and each turn.
+* Game can be paused and resumed by a player. It also automatically pauses when all players leave.
+
+### Limitations
 
 * Human players only.  No computer players are available.
 * No dictionary.  Any word can be entered.
@@ -65,24 +54,6 @@ want to keep it that way.
   log using the node-dirty database system.  This works well, but has limited
   capacity and the database file grows without bounds.
 
-As I am not planning to provide the game as a public service, but rather
-run it for me and my friends to use, these limitations do not bother me.
-If you look at the game, please consider that it is a game meant to be
-played between friends, not an Internet service open to the general public.
-
-## Future changes
-
-I am open to patch submissions as long as the playability of the game
-is preserved.  In particular, we want no dictionary matching, fast
-next game creation, no passwords, keyboard operability.  I also want
-zero-effort deployment (i.e. no mandatory dependency on a database
-server).
-
-It would be somewhat nice to grow the game into a public service, but
-there is a lot of work left towards that goal, and I don't intend to
-make such an effort given the uncertain licensing issues.  If you want
-to deal with the legal aspects, let me know.
-
 ## Installing
 
 The game uses node.js as server and depends on some npm packages.  To install
@@ -94,41 +65,55 @@ $ npm install
 
 ## Configuration
 
-Settings can be be changed by the way of a configuration file which
-must be named 'config.json' and placed in the main html-scrabble
-directory.  The default configuration file is included as
-[config-default.json](html-scrabble/blob/master/config-default.json). It
-can be copied to config.json and then edited.
+Create a `workdir` (defaults to the application directory) where you store 
+`config.json` and the game database files. 
 
-By default, the server starts on port 9093 and uses the smtp server
-running on the local host to send out game invitation emails.  The
-invitation emails contain the "localhost" in the URL, so they will
-only work for a browser running on the same machine as the server.
+The game reads `config.default.json` and updates it with any changes in 
+`config.json`. At a minimum `config.json` must include `adminUsers`
+(a comma-separated list of admin users): 
 
-As a minimum, the ```baseUrl``` and ```mailSender``` configuration
-properties should be changed.  Furthermore, if you are not running an
-SMTP server on your server, you need to set the
-```mailTransportConfig``` appropriately.  Please refer to [nodemailer
-documentation](http://documentup.com/andris9/nodemailer/#setting-up-a-transport-method)
-for information on how to configure nodemailer.
-
-### Protecting the game list
-
-If you deploy your Scrabble server in the Internet, you may want to
-protect your game list so that pranksters can't mess up your games.
-You can do so by adding a ```gameListLogin``` property to your
-configuration like so:
-
-```
-    "gameListLogin": {
-        "username": "foo",
-        "password": "bar"
+    $ cat workdir/config.json
+    {
+        "adminUsers": "user1, user2"
     }
-```
 
-Note that this is meant as a light protective measure.  Do not use a
-password that you use elsewhere.  Thank you for observing all safety
-measures.
+## Reverse Proxy
+
+A reverse proxy must be configured to set a header (specified as the 
+`usernameHeader` in `config-default.json`) to the username. This defaults to
+`X-WEBAUTH-USER`. Websocket proxying must also be enabled. 
+
+An example Nginx config: 
+
+    upstream scrabbleWeb { server 127.0.0.1:9093; }
+    server {
+            listen 80;
+            server_name scrabble.example.com;
+            return 301 https://$host$request_uri;
+    }
+    server {
+            listen 443 ssl http2;
+            server_name scrabble.example.com;
+
+            ssl_certificate           /etc/letsencrypt/live/scrabble.example.com/fullchain.pem;
+            ssl_certificate_key       /etc/letsencrypt/live/scrabble.example.com/privkey.pem;
+
+            auth_basic             "Restircted access";
+            auth_basic_user_file   "/etc/nginx/passwords.htpasswd";
+
+            location / {
+                proxy_pass          http://scrabbleWeb;
+                proxy_http_version  1.1;
+                proxy_set_header    Host $host;
+                proxy_set_header    X-WEBAUTH-USER $remote_user;
+                proxy_set_header    Upgrade $http_upgrade;
+                proxy_set_header    Connection "upgrade";
+                proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header    X-Forwarded-Proto $scheme;
+                proxy_set_header    X-Forwarded-Protocol $scheme;
+                proxy_set_header    X-Forwarded-Host $http_host;
+            }
+    }
 
 ## Running
 
@@ -140,16 +125,3 @@ $ node server.js
 ```
 
 Open your web browser on the configured game URL to create a new game.
-
-## Deleting a game
-
-    jq -c 'select(.key != "b657b5d33a7736b0")' data.db | sponge data.db
-
-If you have trouble getting the server to run, feel free to contact
-me.  Be aware, though, that you will need a machine to run the server
-on (I'm using my Mac, but FreeBSD or Linux will work as well) and have
-some command line knowledge.  I cannot help you if you don't know your
-way through the shell and development tools.
-
-Enjoy,
-Hans (hans.huebner@gmail.com)
