@@ -23,11 +23,11 @@ This repository was cloned from https://github.com/hanshuebner/html-scrabble
 
 **Additions:**
 
-* Users log-in via a HTTP header from a reverse-proxy header, such as from nginx's auth\_basic or auth\_request.
-* Users can only play as their own users. No arbitrary players. Email feature removed.
-* Able to delete games and see finished games.
-* There are now clocks for the game, each player, and each turn.
-* Game can be paused and resumed by a player. It also automatically pauses when all players leave.
+* Users log-in via a HTTP header set by a reverse-proxy. For example Nginx can use auth\_basic or auth\_request for authentication.
+* Users can only play as their own players. No arbitrary players. No emails. 
+* Admin or game creator can delete games. Everyone can see finished games.
+* Each game, player and turn have clocks. The UI also shows the clocks counting up. 
+* Game can be paused and resumed. It also automatically pauses when all players have left.
 
 ### Limitations
 
@@ -57,11 +57,9 @@ This repository was cloned from https://github.com/hanshuebner/html-scrabble
 ## Installing
 
 The game uses node.js as server and depends on some npm packages.  To install
-dependencies:
+dependencies: 
 
-```
-$ npm install
-```
+    $ npm install
 
 ## Configuration
 
@@ -117,11 +115,7 @@ An example Nginx config:
 
 ## Running
 
-Once you're satisfied with the configuration, you can start the game
-server using
+Start the game server using
 
-```
-$ node server.js
-```
-
-Open your web browser on the configured game URL to create a new game.
+    $ node server.js
+    
