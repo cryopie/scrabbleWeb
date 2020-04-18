@@ -46,10 +46,26 @@ function populateUserlist() {
       });
       $("#userList").trigger('updateAll');
       if (window.userlist[window.myname].isAdmin) {
-	$("#userName").text(window.myname + " (admin)");
+        $("#spongeDB").html("Sponge DB");
+        $("#spongeDB").addClass("buttE").removeClass("buttD");
+        $("#userName").html("&nbsp; | &nbsp;" +  window.myname + " (admin)");
       } else {
 	$("#userName").text(window.myname);
       }
+      $("#spongeDB").hover(function() {
+          $.getJSON("/admin/dbSize", function(data) {
+            $("#spongeDB").html("Sponge DB (" + data.size + ")");
+        });
+      });
+      $("#spongeDB").click(function() {
+        $.post('/admin/spongeDB', function(data) {
+          $.blockUI({message: "<h3>" + data.msg + "</h3>"});
+          setTimeout(function() {
+            $.unblockUI();
+          }, 3000);
+        })
+      });
+
     });
 }
 

@@ -1,5 +1,6 @@
 {
     "port": 9093,
+    "loglevel": "info",
     "usernameHeader": "X-WEBAUTH-USER",
     "adminUsers": "",
     "title": "scrabbleWeb"

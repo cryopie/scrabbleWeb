@@ -6,15 +6,15 @@
 .floatRight {
     float: right;
     display: inline-block;
-    margin-right: 2em;
+    margin-right: 1em;
 }
 
 .container {
     overflow: hidden;
 }
 
-.linkE, .linkD {
-  padding: 4px 12px;
+.linkE, .linkD, .buttE, .buttD {
+  padding: 4px 4px;
   text-align: center;
   text-decoration: none;
   display: inline-block;
@@ -28,7 +28,20 @@
   color: #c21d1d; 
 }
 
-.linkE:hover, .linkE:active {
+.buttE {
+  outline: 0 none;
+  border: none;
+  background: none;
+  font-family: "Trebuchet MS", Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  font-weight: bold;
+}
+
+.buttD {
+  visibility: hidden;  
+}
+
+.linkE:hover, .linkE:active, .buttE:hover, .buttE:active {
   background-color: #59372E;
   color: white;
 }
@@ -36,7 +49,6 @@
 .linkD:hover, .linkD:active {
   cursor: default;
 }
-
 
 .tooltip .tooltiptext {
   visibility: hidden;
@@ -68,7 +80,7 @@ table#gameList td, table#gameList th, table#userList td, table#userList th{
   border: 1px solid #ddd;
   padding-top: 12px;
   padding-bottom: 12px;
-  padding: 3px;
+  padding: 2px;
   font-weight: bold;
   text-align: center;
 }

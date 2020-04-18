@@ -30,6 +30,10 @@ var argv = require('optimist')
     alias: 'config',
     'default': 'config.json'
   })
+  .options('l', {
+    alias: 'loglevel',
+    'default': 'info'
+  })
   .argv;
 
 // Config ////////////////////////////////////////////////////////////////////
@@ -57,11 +61,34 @@ function maybeLoadConfig() {
 var config = maybeLoadConfig();
 console.log('config', config);
 
+// Logging ////////////////////////////////////////////////////////////////////
+
+function logger(level, message) {
+  date = new Date().toLocaleDateString('en-GB', {
+    year: "2-digit", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit"
+  });
+  var levels = ['debug', 'info', 'warn', 'error'];
+  if (levels.indexOf(level) >= levels.indexOf(config.loglevel)) {
+    if (typeof message !== 'string') {
+      message = JSON.stringify(message);
+    };
+    console.log("["+date+"] " + level +': '+ message);
+    }
+}
+
+var log = {
+  debug: function(m) { logger("debug", m);},
+  info: function(m) { logger("info", m);},
+  warn: function(m) { logger("warn", m);},
+  error: function(m) { logger("error", m); }
+};
+
 // Database //////////////////////////////////////////////////////////////////////
 
 var db = new DB.DB(argv.workdir + "/" + argv.database);
 db.on('load', function() {
-  console.log('database loaded');
+  log.info('Database loaded from ' + argv.database);
 });
 
 db.registerObject(scrabble.Tile);
@@ -169,7 +196,9 @@ Game.create = function(language, players, owner) {
   game.createTime = Date.now();
   game.duration = 0;
   game.startTime = -1;
-  game.paused = false;
+  game.paused = true;
+  game.pausedBy = "system";
+  game.pausedWhy = "Waiting for players ... ";
   game.label = gamelabels.getRandomLabel();
   game.save();
   return game;
@@ -196,7 +225,8 @@ Game.prototype.save = function(key) {
   db.set(this.key, this);
 }
 
-Game.prototype.nuke = function(key) {
+Game.prototype.nuke = function() {
+  log.info("Deleting game: " + this.label);
   db.nuke(this.key);
 }
 
@@ -248,27 +278,39 @@ Game.prototype.ensurePlayerAndGame = function(player) {
   }
 }
 
-Game.prototype.pauseGame = function(player, lastPlayerLeft) {
+Game.prototype.pauseGame = function(player, message) {
   var game = this;
-  game.pauseTime = Date.now();
-  game.pauseDuration = 0;
-  game.paused = true;
-  game.save();
-  if (lastPlayerLeft) {
-    console.log("Game " + game.label + " paused due to the last player leaving on " + Date().toLocaleString());
-  } else {
-    console.log("Game " + game.label + " paused by " + player.name + " on " + Date().toLocaleString());
-    game.notifyListeners('pause', {pausedBy: player.name});
+  if (game.finished) {
+    return;
   }
+  game.pauseTime = Date.now();
+  game.paused = true;
+  game.pausedBy = player.name;
+  game.pausedWhy = message;
+  log.info("Game '" + game.label + "' paused by '" + player.name + "'");
+  game.save();
+  game.notifyListeners('pause', {pausedBy: player.name, why: message});
 }
 
 Game.prototype.resumeGame = function(player) {
   var game = this;
-  game.pauseDuration = Date.now() - game.pauseTime;
+  // game.pauseDuration: total pause duration for the turn
+  // game.pauseDuration is reset in finishTurn()
+  if (game.turns.length == 0) {
+    game.pauseDuration = Date.now() - game.startTime;
+  } else {
+    game.pauseDuration += (Date.now() - game.pauseTime);
+  }
   game.pauseTime = 0;
   game.paused = false;
+  game.pausedBy = "system";
+  game.pausedWhy = "";
+  if (!(game.startTime > 0)) {
+    game.startTime = Date.now();
+  } else {
+    log.info("Game '" + game.label + "' resumed by '" + player.name + "'");
+  }
   game.save();
-  console.log("Game " + game.label + " resumed by " + player.name + " on " + Date().toLocaleString());
   game.notifyListeners('resume', {});
 }
   
@@ -582,9 +624,6 @@ Game.prototype.finish = function(reason) {
   };
   game.endMessage = endMessage;
   game.finished = true;
-
-  // This creates a new DB file, removing the finished game.
-  // db.snapshot();
 }
 
 Game.prototype.ended = function() {
@@ -602,18 +641,61 @@ Game.prototype.newConnection = function(socket, player) {
     socket.player = player;
     game.notifyListeners('join', player.index);
   }
+  // On disconnect, notify. If everyone leaves, pauseGame after 30 seconds
   socket.on('disconnect', function () {
     game.connections = _.without(game.connections, this);
     if (player) {
       game.notifyListeners('leave', player.index);
     }
     if (game.connections.length == 0) {
-      game.pauseGame(player, true);
+      setTimeout(function() {
+        if (game.connections.length == 0 && (game.paused == false)) {
+          game.pauseGame(player, "Last player left");
+          game.pausedBy = "system"
+        }
+      }, 10 * 1000);
     }
   });
+  // If it's a new game, start game when all players have joined. 
+  if (game.turns.length == 0 && game.paused && (!(game.finished))) { 
+    if (game.connections.length == game.players.length) {
+      game.resumeGame(player)
+    }
+  }
 }
 
 // Handlers //////////////////////////////////////////////////////////////////
+function gameHandler(handler) {
+  return function(req, res) {
+    var gameKey = req.params.gameKey;
+    var game = Game.load(gameKey);
+    if (!game) {
+      console.log("Game " + req.params.gameKey + " does not exist");
+      res.send(404);
+    } else {
+      handler(game, req, res);
+    }
+  }
+}
+
+function playerHandler(handler) {
+  return gameHandler(function(game, req, res) {
+    var player = game.lookupPlayer(req);
+    handler(player, game, req, res);
+  });
+}
+
+function adminHandler(handler) {
+  return (function(req, res) {
+    if (adminUsers.includes(req.username)) {
+      handler(req, res);
+    } else {
+      log.warn("Non-admin user called " + handler);
+      res.send(401);
+    }
+  })
+}
+
 app.get("/", function(req, res) {
   res.redirect("/games.html");
 });
@@ -661,7 +743,7 @@ app.get("/game", function(req, res) {
 app.get("/deleteGame/:gameKey", gameHandler(function(game, req, res) {
   var thisPlayer = game.lookupPlayer(req, true);
   if (!game.finished) {
-    if (thisPlayer.name == game.owner || adminUsers.includes(req.username)) {
+    if (adminUsers.includes(req.username) || thisPlayer.name == game.owner) {
       game.nuke();
     }
   }
@@ -685,26 +767,32 @@ app.post("/game", function(req, res) {
 
   var game = Game.create(req.body.language || 'English', players, req.username);
 
-  res.redirect("/game/" + game.key + "/" + game.players[0].key);
+  res.redirect("/games.html");
 });
 
-function gameHandler(handler) {
-  return function(req, res) {
-    var gameKey = req.params.gameKey;
-    var game = Game.load(gameKey);
-    if (!game) {
-      throw "Game " + req.params.gameKey + " does not exist";
-    }
-    handler(game, req, res);
-  }
-}
-
-function playerHandler(handler) {
-  return gameHandler(function(game, req, res) {
-    var player = game.lookupPlayer(req);
-    handler(player, game, req, res);
+app.get("/admin/dbSize", adminHandler(function(req, res) {
+  var stats = fs.statSync(db.path);
+  var sizeInMB = (stats["size"] / (1024 * 1024)).toFixed(2);
+  res.send({
+    name: db.path,
+    size: sizeInMB + " MiB"
   });
-}
+}));
+
+app.post("/admin/spongeDB", adminHandler(function(req, res) {
+  var games = db.all();
+  var unFinishedGames = games.filter((game) => (!(game.finished)));
+  var ufgl = unFinishedGames.length
+  if (ufgl == 1) {
+    res.send({msg: "Cannot sponge while there is an unfinished game"});
+  } else if (ufg > 1) {
+    res.send({msg: "Cannot sponge while there are " + ufgl + " unfininshed games"});
+  }
+  else {
+    db.sponge();
+    res.send({msg: "Done"})
+  }
+}));
 
 app.get("/game/:gameKey/:playerKey", gameHandler(function (game, req, res) {
   res.cookie(req.params.gameKey, req.params.playerKey, { path: '/', maxAge: (30 * 24 * 60 * 60 * 1000) });
@@ -713,30 +801,20 @@ app.get("/game/:gameKey/:playerKey", gameHandler(function (game, req, res) {
 
 app.get("/game/:gameKey", gameHandler(function (game, req, res, next) {
   var thisPlayer = game.lookupPlayer(req, true);
-  if (!(game.finished) && (game.startTime == null || game.startTime == -1)) {
-    if (thisPlayer != game.players[game.whosTurn]) { // Wait for the game to start. 
-      return res.redirect("/");
-    } 
-    else {
-      console.log("Game " + game.label + " started by " + thisPlayer + " on " + Date().toLocaleString());
-      game.startTime = Date.now();
-    }
-  }
-
-  if (game.paused) {
-    game.resumeGame(thisPlayer);
-  }
-
   req.negotiate({
     'application/json': function () {
       var response = { board: game.board,
         turns: game.turns,
+        paused: game.paused,
+        pausedBy: game.pausedBy,
+        pausedWhy: game.pausedWhy,
         finished: game.finished,
         language: game.language,
         whosTurn: game.whosTurn,
         chatHistory: game.chatHistory,
-        gameDuration: game.duration,
+        duration: game.duration,
         pauseDuration: game.pauseDuration,
+        startTime: game.startTime,
         remainingTileCounts: game.remainingTileCounts(),
         legalLetters: game.letterBag.legalLetters,
         players: [] }
@@ -783,8 +861,15 @@ app.post("/game/:gameKey", playerHandler(function(player, game, req, res) {
       game.createFollowonGame(player, req.username);
       break;
     case 'pauseGame': 
-      game.pauseGame(player, false);
+      if (!(game.paused)) {
+        game.pauseGame(player);
+      }
       break;
+    case 'resumeGame':
+      if (game.paused) {
+        game.resumeGame(player);
+      }
+      break
     default:
       throw 'unrecognized game PUT command: ' + body.command;
   }

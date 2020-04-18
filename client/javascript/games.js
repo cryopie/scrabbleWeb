@@ -65,7 +65,8 @@ function populateGamesList() {
                 }, game.label)
             ),
             TD(null, game.owner),
-            TD(null, new Date(game.createTime).toLocaleString()),
+            TD(null, new Date(game.createTime).toLocaleDateString('en-IN', {hour: "2-digit",
+              minute: "2-digit"})),
             TD(null, game.players.map(function(player) { 
               return appendChildNodes(
                 (window.myname == player.name || window.userlist[window.myname].isAdmin) ? 
@@ -78,7 +79,7 @@ function populateGamesList() {
               )}
             )),
             TD(null,
-              (game.finished ? "F": (game.paused ? "P" : "R"))
+              (game.finished ? "Finished": (game.paused ? "Paused" : "Running"))
             ),
             function() {
               var td_actions = TD(null);
@@ -97,6 +98,7 @@ function populateGamesList() {
     $("#gameList").tablesorter({
       widthFixed: true, 
       debug: false,
+      dateFormat: "ddmmyy",
       sortList: [[2, "desc"]]
     });
   });
