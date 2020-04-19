@@ -63,7 +63,7 @@ console.log('config', config);
 
 // Logging ////////////////////////////////////////////////////////////////////
 
-function logger(level, message) {
+function logger(level, message, game, player) { // message is mandatory
   date = new Date().toLocaleDateString('en-GB', {
     year: "2-digit", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", second: "2-digit"
@@ -73,15 +73,19 @@ function logger(level, message) {
     if (typeof message !== 'string') {
       message = JSON.stringify(message);
     };
-    console.log("["+date+"] " + level +': '+ message);
+    m = "["+date+"] " + level +': ';
+    m += game == null? "" : "(Game: " + game.label + ") ";
+    m += player == null? "" : "(Player: " + player.name + ") ";
+    m += message;
+    console.log(m);
     }
 }
 
 var log = {
-  debug: function(m) { logger("debug", m);},
-  info: function(m) { logger("info", m);},
-  warn: function(m) { logger("warn", m);},
-  error: function(m) { logger("error", m); }
+  debug: function(m, g, p) { logger("debug", m, g, p);},
+  info: function(m, g, p) { logger("info", m, g, p);},
+  warn: function(m, g, p) { logger("warn", m, g, p);},
+  error: function(m, g, p) { logger("error", m, g, p); }
 };
 
 // Database //////////////////////////////////////////////////////////////////////
@@ -193,12 +197,13 @@ Game.create = function(language, players, owner) {
   game.passes = 0;
   game.owner = owner;
   game.finished = false;
+  game.winners = [];
   game.createTime = Date.now();
   game.duration = 0;
   game.startTime = -1;
   game.paused = true;
-  game.pausedBy = "system";
-  game.pausedWhy = "Waiting for players ... ";
+  game.pausedBy = players.map((player) => player.name);
+  game.pausedWhy = "Waiting for players to join ... ";
   game.label = gamelabels.getRandomLabel();
   game.save();
   return game;
@@ -226,8 +231,22 @@ Game.prototype.save = function(key) {
 }
 
 Game.prototype.nuke = function() {
-  log.info("Deleting game: " + this.label);
+  log.info("Deleting game.", this);
   db.nuke(this.key);
+}
+
+function patchUpFinishedGame(game) {
+  return;
+  var maxscore = 0;
+  var winners = [];
+  game.players.forEach(function(player) {
+    if (player.score > maxscore) {
+      winners = [player.name];
+      maxscore = player.score;
+    }
+  })
+  game.winners = winners;
+  game.save();
 }
 
 Game.load = function(key) {
@@ -239,6 +258,7 @@ Game.load = function(key) {
     if (!game) {
       return null;
     }
+    patchUpFinishedGame(game);
     EventEmitter.call(game);
     game.connections = [];
     Object.defineProperty(game, 'connections', { enumerable: false }); // makes connections non-persistent
@@ -283,35 +303,48 @@ Game.prototype.pauseGame = function(player, message) {
   if (game.finished) {
     return;
   }
-  game.pauseTime = Date.now();
-  game.paused = true;
-  game.pausedBy = player.name;
-  game.pausedWhy = message;
-  log.info("Game '" + game.label + "' paused by '" + player.name + "'");
+  if (game.pausedBy.includes(player.name)) {
+    log.warn("Cannot pause twice");
+    return;
+  }
+  game.pausedBy.push(player.name);
+  log.debug(message == null? "Player paused game" : message, game, player);
+  if (!game.paused) {
+    game.pauseTime = Date.now();
+    game.paused = true;
+    game.pausedWhy = (message == null? "" : message);
+    log.debug("Game paused", game);
+  }
   game.save();
-  game.notifyListeners('pause', {pausedBy: player.name, why: message});
+  game.notifyListeners('reload');
 }
 
 Game.prototype.resumeGame = function(player) {
   var game = this;
-  // game.pauseDuration: total pause duration for the turn
-  // game.pauseDuration is reset in finishTurn()
-  if (game.turns.length == 0) {
-    game.pauseDuration = Date.now() - game.startTime;
-  } else {
-    game.pauseDuration += (Date.now() - game.pauseTime);
+  if (!game.pausedBy.includes(player.name)) {
+    log.warn("Cannot resume without pausing", game, player);
+    return;
   }
-  game.pauseTime = 0;
-  game.paused = false;
-  game.pausedBy = "system";
-  game.pausedWhy = "";
-  if (!(game.startTime > 0)) {
-    game.startTime = Date.now();
-  } else {
-    log.info("Game '" + game.label + "' resumed by '" + player.name + "'");
+  game.pausedBy = game.pausedBy.filter((x) => x != player.name);
+  log.debug("Player resumed game", game, player);
+  if (game.pausedBy.length == 0) { // Resume game.
+    if (game.turns.length == 0) {
+      if (!(game.startTime > 0)) {
+        game.startTime = Date.now();
+        game.pauseDuration = 0;
+      } else {
+        game.pauseDuration = (Date.now() - game.startTime);
+      }
+    } else {
+      game.pauseDuration += (Date.now() - game.pauseTime);
+    }
+    game.pauseTime = 0;
+    game.paused = false;
+    game.pausedWhy = "";
+    log.debug("Game resumed", game);
   }
   game.save();
-  game.notifyListeners('resume', {});
+  game.notifyListeners('reload');
 }
   
 Game.prototype.makeMove = function(player, placementList) {
@@ -505,7 +538,7 @@ Game.prototype.remainingTileCounts = function() {
 
 Game.prototype.finishTurn = function(player, newTiles, turn) {
   var game = this;
-  // Calculate turn durations
+  // Calculate turn duration
   var now = Date.now();
   turn.endtime = now;
   if (game.turns.length == 0) {  // First turn
@@ -587,6 +620,8 @@ Game.prototype.finish = function(reason) {
   // Tally scores  
   var playerWithNoTiles;
   var pointsRemainingOnRacks = 0;
+  var winners = [];
+  var winningScore = 0;
   game.players.forEach(function(player) {
     var tilesLeft = false;
     var rackScore = 0;
@@ -605,6 +640,13 @@ Game.prototype.finish = function(reason) {
         throw "unexpectedly found more than one player with no tiles when finishing game";
       }
       playerWithNoTiles = player;
+    }
+    if (player.score >= winningScore) {
+      if (player.score > winningScore) {
+        winners = [];
+        winningScore = player.score;
+      }
+      winners.push(player.name);
     }
   });
 
@@ -649,19 +691,13 @@ Game.prototype.newConnection = function(socket, player) {
     }
     if (game.connections.length == 0) {
       setTimeout(function() {
-        if (game.connections.length == 0 && (game.paused == false)) {
-          game.pauseGame(player, "Last player left");
-          game.pausedBy = "system"
+        if (game.connections.length == 0 && !game.paused) {
+          game.pauseGame(player, "Autopause: all players left");
+          game.pausedBy = game.players.map((player) => player.name);
         }
       }, 10 * 1000);
     }
   });
-  // If it's a new game, start game when all players have joined. 
-  if (game.turns.length == 0 && game.paused && (!(game.finished))) { 
-    if (game.connections.length == game.players.length) {
-      game.resumeGame(player)
-    }
-  }
 }
 
 // Handlers //////////////////////////////////////////////////////////////////
@@ -722,6 +758,7 @@ app.get("/games", function(req, res) {
     .map(function (game) {
       return { key: game.key,
         finished: game.finished,
+        winners: game.winners == null? [] : game.winners,
         paused: game.paused == null? false : game.paused,
         createTime: game.createTime,
         startTime: game.startTime,
@@ -741,13 +778,22 @@ app.get("/game", function(req, res) {
 });
 
 app.get("/deleteGame/:gameKey", gameHandler(function(game, req, res) {
-  var thisPlayer = game.lookupPlayer(req, true);
   if (!game.finished) {
-    if (adminUsers.includes(req.username) || thisPlayer.name == game.owner) {
+    if (adminUsers.includes(req.username) || req.username == game.owner) {
       game.nuke();
     }
   }
   res.redirect("/games.html");
+}));
+
+app.post("/pauseGame/:gameKey", playerHandler(function(player, game, req, res) {
+  game.pauseGame(player);
+  res.redirect("back"); // Refresh the screen
+}));
+
+app.post("/resumeGame/:gameKey", playerHandler(function(player, game, req, res) {
+  game.resumeGame(player);
+  res.redirect("back"); // Refresh the screen
 }));
 
 app.post("/game", function(req, res) {
@@ -785,7 +831,7 @@ app.post("/admin/spongeDB", adminHandler(function(req, res) {
   var ufgl = unFinishedGames.length
   if (ufgl == 1) {
     res.send({msg: "Cannot sponge while there is an unfinished game"});
-  } else if (ufg > 1) {
+  } else if (ufgl > 1) {
     res.send({msg: "Cannot sponge while there are " + ufgl + " unfininshed games"});
   }
   else {
@@ -803,17 +849,20 @@ app.get("/game/:gameKey", gameHandler(function (game, req, res, next) {
   var thisPlayer = game.lookupPlayer(req, true);
   req.negotiate({
     'application/json': function () {
-      var response = { board: game.board,
+      var response = { 
+        key: game.key,
+        board: game.board,
         turns: game.turns,
         paused: game.paused,
         pausedBy: game.pausedBy,
         pausedWhy: game.pausedWhy,
+        pauseTime: game.pauseTime,
+        pauseDuration: game.pauseDuration,
         finished: game.finished,
         language: game.language,
         whosTurn: game.whosTurn,
         chatHistory: game.chatHistory,
         duration: game.duration,
-        pauseDuration: game.pauseDuration,
         startTime: game.startTime,
         remainingTileCounts: game.remainingTileCounts(),
         legalLetters: game.letterBag.legalLetters,
@@ -860,16 +909,6 @@ app.post("/game/:gameKey", playerHandler(function(player, game, req, res) {
     case 'newGame':
       game.createFollowonGame(player, req.username);
       break;
-    case 'pauseGame': 
-      if (!(game.paused)) {
-        game.pauseGame(player);
-      }
-      break;
-    case 'resumeGame':
-      if (game.paused) {
-        game.resumeGame(player);
-      }
-      break
     default:
       throw 'unrecognized game PUT command: ' + body.command;
   }

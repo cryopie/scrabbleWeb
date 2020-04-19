@@ -64,18 +64,17 @@ function populateGamesList() {
                       .map(function(player) { return player.key ; })
                 }, game.label)
             ),
-            TD(null, game.owner),
+            TD(null, game.owner ),
             TD(null, new Date(game.createTime).toLocaleDateString('en-IN', {hour: "2-digit",
               minute: "2-digit"})),
             TD(null, game.players.map(function(player) { 
               return appendChildNodes(
-                (window.myname == player.name || window.userlist[window.myname].isAdmin) ? 
-                A({'href': '/game/' + game.key + '/' + player.key,
-                   'class': 'linkE ' + (player.hasTurn ? 'hasTurn' : '')
-                  }, player.name) : 
-                A({'href': '#',
-                   'class': 'linkD ' + (player.hasTurn ? 'hasTurn' : '')
-                  }, player.name)
+                A(((window.myname == player.name || window.userlist[window.myname].isAdmin) ? 
+                    {'href': '/game/' + game.key + '/' + player.key,
+                    'class': 'linkE ' + (player.hasTurn ? 'hasTurn ' : '')} :
+                    {'href': '#', 'class': 'linkD ' + (player.hasTurn ? 'hasTurn' : '')}
+                  ), player.name + (game.winners.includes(player.name) ? '(W)' : '')
+                )
               )}
             )),
             TD(null,

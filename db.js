@@ -39,7 +39,7 @@ DB.prototype.sponge = function() {
     var db = this;
     var filename = this.path + ".temporary";
     if (fs.existsSync(filename)) {
-        throw 'snapshot cannot overwrite existing file ' + filename;
+        throw 'sponge cannot overwrite existing file ' + filename;
     }
     var sponged = dirty(filename);
     sponged.on('load', function() {

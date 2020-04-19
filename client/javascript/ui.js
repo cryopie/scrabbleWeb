@@ -34,7 +34,7 @@ function UI(game) {
 
   $.get('/game/' + this.gameKey, function (gameData, err) {
     gameData = thaw(gameData, PrototypeMap);
-    // console.log('gameData', gameData);
+    console.log('gameData', gameData);
 
     ui.swapRack = new Rack(7);
     ui.swapRack.tileCount = 0;
@@ -47,8 +47,6 @@ function UI(game) {
     ui.duration = gameData.duration;
     ui.pauseDuration = gameData.pauseDuration;
     ui.paused = gameData.paused;
-    ui.pausedBy = gameData.pausedBy;
-    ui.pausedWhy = gameData.pausedWhy;
     ui.startTime = gameData.startTime;
     ui.finished = gameData.finished;
 
@@ -93,15 +91,23 @@ function UI(game) {
       })
     }
 
-    // Start timers 
-    ui.turnTime = -1;
-    ui.gameTime = (ui.duration == null ? -1 : ui.duration);
-    if (!(ui.finished)) {
-      prevTime = (gameData.turns.length == 0 ? ui.startTime : gameData.turns[gameData.turns.length - 1].endtime);
-      ui.turnTime = (Date.now() - prevTime);
-      ui.turnTime -= (ui.pauseDuration == null ? 0 : ui.pauseDuration);
-      ui.pauseDuration = 0;
-      ui.gameTime += ui.turnTime;
+    // Start timers
+    ui.turnTime = 0;
+    ui.gameTime = (ui.duration == null ? 0 : ui.duration);
+    if (!ui.finished) { // This is not a finished game
+      if (ui.startTime > 0) { // Game has started
+        prevTime = (gameData.turns.length == 0 ? ui.startTime : gameData.turns[gameData.turns.length - 1].endtime);
+        ui.turnTime = (Date.now() - prevTime);
+        ui.turnTime -= (ui.pauseDuration == null ? 0 : ui.pauseDuration);
+        // If this is a paused game. subtract current pause time (not yet in pauseDuration)
+        if (ui.paused) {
+          ui.turnTime -= (Date.now() - gameData.pauseTime);
+        }
+        ui.gameTime += ui.turnTime;
+      } else { // Game not yet started
+        ui.gameTime = 0;
+        ui.startTime = 0;
+      }
     }
     ui.runClock();
     $("#pauseGame").click(ui.pauseGame);
@@ -283,10 +289,6 @@ function UI(game) {
       }
     }
 
-    if (ui.paused) {
-      ui.onPauseGame({pausedBy: ui.pausedBy, why: ui.pausedWhy});
-    }
-
     var transports = ['websocket', 'flashsocket', 'htmlfile', 'xhr-multipart', 'xhr-polling', 'jsonp-polling'];
 
     ui.socket = io.connect(null, { transports: transports });
@@ -379,6 +381,9 @@ function UI(game) {
         ui.updateGameStatus();
       })
       .on('gameEnded', function (endMessage) {
+        if (!ui.finished) { // Game just finished. Reload
+          location.reload();
+        }
         endMessage = thaw(endMessage, PrototypeMap);
         displayEndMessage(endMessage);
         ui.notify('Game over!', 'Your game is over...');
@@ -394,35 +399,82 @@ function UI(game) {
           .removeClass('offline')
           .addClass('online');
       })
-      .on('pause', function(data) {
-        console.log("Game paused");
-        ui.paused = true;
-        ui.onPauseGame(data);
-      })
-      .on('resume', function(data) {
-        ui.onResumeGame(data);
+      .on('reload', function(data) {
+          location.reload(); 
       })
       .on('leave', function(playerNumber) {
         $('tr.player' + playerNumber + ' td.status')
           .removeClass('online')
           .addClass('offline');
       });
-    $('input[name=message]')
-      .bind('focus', function() {
-        ui.clearCursor();
-      })
-      .bind('change', function() {
-        ui.socket.emit('message', { name: ui.thisPlayer.name,
-          text: $(this).val() });
-        $(this).val('');
-      });
+
     $(document)
       .bind('SquareChanged', ui.eventCallback(ui.updateSquare))
       .bind('Refresh', ui.eventCallback(ui.refresh))
       .bind('RefreshRack', ui.eventCallback(ui.refreshRack))
       .bind('RefreshBoard', ui.eventCallback(ui.refreshBoard));
 
+    // Load wordlists, dictionaries
+    ui.loadWordLists(gameData.language);
+
+    // Pause, resume, exit buttons
+    $("#exitPaused").click(function() { 
+        location.href="/"; 
+    });
+    $("#pauseGame").click(function() { 
+      $.post('/pauseGame/' + gameData.key , function(data) {
+        location.reload(); 
+      });
+    });
+
+    if (gameData.pausedBy.includes(ui.thisPlayer.name)) {
+      $("#resumeOrPause").text("Resume");
+      $("#resumeOrPause").click(function() { 
+        $.post('/resumeGame/' + gameData.key , function(data) {
+          location.reload(); 
+        });
+      });
+    } else {
+      $("#resumeOrPause").text("Pause");
+      $("#resumeOrPause").click(function() { 
+        $.post('/pauseGame/' + gameData.key , function(data) {
+          location.reload(); 
+        });
+      });
+    }
+    // Block screen if paused 
+    if (ui.paused) {
+      msg = "Game paused by: [" + gameData.pausedBy.join(", ") + "]<br/>";
+      msg += (gameData.pausedWhy == null ? "" : gameData.pausedWhy + "<br/>");
+      $("#questionText").html(msg);
+      $("#chat").detach().appendTo("#question");
+      $.blockUI({message: $("#question"), 
+        css: { width: '300px', padding: "2em 2em 2em 2em"},
+        overlayCSS: {opacity: 0.90}
+      });
+    }
+  }); // end $.get("/game/:gameKey")
+
+  // Default key presses
+  $('input[name=message]')
+    .bind('focus', function() {
+      ui.clearCursor();
+    })
+    .bind('change', function() {
+      ui.socket.emit('message', { name: ui.thisPlayer.name,
+        text: $(this).val() });
+      $(this).val('');
+    });
+
+  $(document).on('keydown', function (event) {  
+    if (ui.cursor) { return; } // If cursor is focused, we don't handle it
+    if (event.key == " ") {
+      if (event.target.id != 'messageInputBox') {
+        $("#messageInputBox").focus();
+      }
+    }
   });
+
   var button = BUTTON({ id: 'turnButton', action: 'pass' }, 'Pass')
   $(button).bind('click', ui.eventCallback(ui.makeMove));
   $('#turnButtons')
@@ -573,37 +625,6 @@ UI.prototype.runClock = function() {
     ui.turnTime += 1000;
   }
   setTimeout(ui.runClock, 1000);
-}
-
-UI.prototype.pauseGame = function() {
-  ui.sendMoveToServer('pauseGame', {}, function(data, textStatus, jqXHR) {
-    $.blockUI("Game paused by you. Click to resume or close tab to exit.");
-    $('.blockOverlay').attr('title','Click to resume').click(location.reload());
-  });
-}
-
-UI.prototype.onPauseGame = function(data) {
-  if (ui.finished) {
-    return
-  }
-  pausedBy = (data.pausedBy == ui.thisPlayer.name ? "me" : data.pausedBy);
-  msg = "Game paused by: " + pausedBy + "<br/>";
-  msg += (data.why == null ? "" : data.why + "<br/>");
-  msg += "Please wait or exit<br/>";
-  $("#questionText").html(msg);
-  $.blockUI({message: $("#question"), css: { width: '300px'} });
-  $("#exitPaused").click(function() { 
-    location.href="/"; 
-  });
-  $("#resumePaused").click(function() { 
-    ui.sendMoveToServer('resumeGame', {}, function(data, textStatus, jqXHR) {});
-    location.reload(); 
-  });
-}
-
-UI.prototype.onResumeGame = function(data) {
-  console.log("Game resumed");
-  location.reload();
 }
 
 UI.prototype.displayRemainingTileCounts = function() {
@@ -1298,7 +1319,7 @@ UI.prototype.setMoveAction = function(action, title) {
 
 UI.prototype.makeMove = function() {
   var action = $('#turnButton').attr('action');
-  console.log('makeMove =>', action);
+  // console.log('makeMove =>', action);
   this.deleteCursor();
   this[action]();
 };
@@ -1404,3 +1425,39 @@ UI.prototype.cancelNotification = function() {
     delete this.notification;
   }
 };
+
+UI.prototype.loadWordLists = function(language) {
+  var ncols = 5;
+  if (language == "English") {
+    var thead = THEAD(null,
+      TR(null,
+        TH({"colspan": 3},
+          A({"class": "linkE", "href": 
+            "https://scrabble.hasbro.com/en-us/tools#dictionary", "target": "_blank"}, "ScrabbleD")
+        ),
+        TH({"colspan": ncols - 3},
+          A({"class": "linkE", "href": 
+            "https://www.lexico.com/definition", "target": "_blank"}, "OED")
+        )
+      ),
+      TR(null,
+        TH({"colspan": ncols}, "Two letter words")
+      )
+    )
+    var tbody = TBODY(null);
+    var tr;
+    colcount = 0;
+    for (i = 0; i < wordlist_twoletters.length; i++) {
+      word = wordlist_twoletters[i];
+      if (colcount % ncols == 0) {
+        tr = TR(null);
+        tbody.append(tr);
+      }
+      tr.append(TD(null, word));
+      colcount += 1;
+    }
+    $("#wordlists table").empty();
+    $("#wordlists table").append(thead);
+    $("#wordlists table").append(tbody);
+  }
+}

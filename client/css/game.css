@@ -26,6 +26,7 @@ div.bottomShade table
     outline: 0 none;
     border: none;
     background: none;
+    font-weight: bold;
 }
 
 .linkE:hover, .linkE:active, .buttE:hover, .buttE:active {
@@ -47,13 +48,10 @@ div#wordlists
     display: inline-block;
     background-color: #F7F7E3;
     border-color: #DCDCC6;
-    border-style: solid;
-    border-radius: 0.4em;
     padding: 1em;
-
     float: left;
     width: 12em;
-    margin: 2em 1em 1em 1em;
+    margin: 2em 1em 0em 0em;
 }
 
 div#wordlists table {
@@ -170,6 +168,7 @@ div#chatLog {
     border-width: 1em;
     width: 98%;
     height: 16em;
+    text-align: left;
 }
 
 div#messageInput {
