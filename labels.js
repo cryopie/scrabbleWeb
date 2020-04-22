@@ -1,3 +1,4 @@
+// Pinched from docker source code
 var prefix = [ "admiring",
 "adoring",
 "affectionate",
