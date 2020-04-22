@@ -211,7 +211,7 @@ function UI(game) {
             player.name + ' gained ' + player.tallyScore + ' points from racks of the other players'));
         } else {
           $('#log').append(DIV({ 'class': 'gameEndScore' },
-            player.name + ' lost ' + -player.tallyScore + ' points for his rack containing the letters '
+            player.name + ' lost ' + -player.tallyScore + ' points for their rack containing the letters '
             + _.without(player.rack.squares.map(function (square) {
               if (square.tile) {
                 return square.tile.letter;
@@ -240,7 +240,10 @@ function UI(game) {
     function placeTurnTiles(turn) {
       for (var i in turn.placements) {
         var placement = turn.placements[i];
-        ui.board.squares[placement.x][placement.y].placeTile(new Tile(placement.letter, placement.score), true);
+        var tile = new Tile(placement.letter, placement.score);
+        var square = ui.board.squares[placement.x][placement.y];
+        square.placeTile(tile, true);
+        ui.blinkSquare(square, 4);
       }
     }
 
@@ -423,7 +426,7 @@ function UI(game) {
     });
     $("#pauseGame").click(function() { 
       $.post('/pauseGame/' + gameData.key , function(data) {
-        location.reload(); 
+        console.log("I paused game");
       });
     });
 
@@ -431,7 +434,7 @@ function UI(game) {
       $("#resumeOrPause").text("Resume");
       $("#resumeOrPause").click(function() { 
         $.post('/resumeGame/' + gameData.key , function(data) {
-          location.reload(); 
+          console.log("I resumed game");
         });
       });
     } else {
@@ -614,16 +617,15 @@ UI.prototype.runClock = function() {
       'color': PlayerColors[i],
       'font-weight': (i == ui.whosTurn? '700' : 'normal')
     })
+    if (i == ui.whosTurn) {
+      $(player.nameElement).html("> " + player.name);
+    } else {
+      $(player.nameElement).html(player.name);
+    }
   }
-  if (ui.paused || ui.finished) {
-    return;
-  }
-  if (ui.gameTime >= 0) { 
-    ui.gameTime += 1000;
-  }
-  if (ui.turnTime >= 0) {
-    ui.turnTime += 1000;
-  }
+  if (ui.paused || ui.finished) { return; }
+  ui.gameTime += 1000;
+  ui.turnTime += 1000;
   setTimeout(ui.runClock, 1000);
 }
 
@@ -689,6 +691,19 @@ UI.prototype.updateSquare = function(square) {
     console.log('could not identify owner of square', square);
   }
 };
+
+UI.prototype.blinkSquare = function(square, nBlinks) {
+  var stepDuration = 1000;      // millisecond for each fade-in/fade-out
+  var stepCount = nBlinks * 2;  // one step each for fade-in/fade-out
+  var runningCount = 0;
+  function step() {
+    $("#" + square.id).fadeToggle(stepDuration, "swing", function() {
+        if (++runningCount <= stepCount) { step(); } 
+        else { $("#" + square.id).toggle(true);  }
+    });
+  };
+  step();
+}
 
 UI.prototype.clearCursor = function() {
   var ui = this;
@@ -860,27 +875,39 @@ UI.prototype.drawBoard = function() {
 UI.prototype.slideRackTiles = function(fromSquare, toSquare) {
   // Slide rack tiles, and move fromSquare to toSquare
   var sqs = ui.rack.squares;
-  var blankId = -1;
+  var blankIds = [];
   var to = -1;
   var from = -1;
   var fromTile = fromSquare.tile;
   for (i = 0; i < sqs.length; i++) {
-    if (!(sqs[i].tile)) { var blankId = i;  }
-    if (sqs[i] == toSquare) { var to = i; }
-    if (sqs[i] == fromSquare) { var from = i; }
+    if (!(sqs[i].tile)) { blankIds.push(i);  }
+    if (sqs[i] == toSquare) { to = i; }
+    if (sqs[i] == fromSquare) { from = i; }
   }
-  if (blankId == to) {
+  if (blankIds.includes(to)) {
     return
   }
+  // Find the blankId closest to 'to'
+  var mindist = Infinity;
+  var closestBlankId = -1;
+  for (i = 0; i < sqs.length; i++) {
+    if (blankIds.includes(i)) {
+      dist = Math.abs(i - to);
+      if (dist < mindist) {
+        closestBlankId = i;
+        mindist = dist;
+      }
+    }
+  }
   sqs[from].placeTile(null); // Remove the tile from fromSquare
-  if (blankId > to) { // Slide right
-    for (i = blankId; i > to; i--) {
+  if (closestBlankId > to) { // Slide right
+    for (i = closestBlankId; i > to; i--) {
       if ((i-1) != from) { // Ignore the fromSquare 
         ui.moveTile(sqs[i-1], sqs[i]);
       }
     }
   } else { // Slide left
-    for (i = blankId; i < to; i++) {
+    for (i = closestBlankId; i < to; i++) {
       if ((i+1) != from) { // Ignore the fromSquare
         ui.moveTile(sqs[i+1], sqs[i]);
       }

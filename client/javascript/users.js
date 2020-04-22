@@ -46,26 +46,37 @@ function populateUserlist() {
       });
       $("#userList").trigger('updateAll');
       if (window.userlist[window.myname].isAdmin) {
-        $("#spongeDB").html("Sponge DB");
-        $("#spongeDB").addClass("buttE").removeClass("buttD");
         $("#userName").html("&nbsp; | &nbsp;" +  window.myname + " (admin)");
+        if (!window.adminFunctionsAdded) {
+          addAdminFunctions();
+          window.adminFunctionsAdded = true;
+        }
       } else {
 	$("#userName").text(window.myname);
       }
-      $("#spongeDB").hover(function() {
-          $.getJSON("/admin/dbSize", function(data) {
-            $("#spongeDB").html("Sponge DB (" + data.size + ")");
-        });
-      });
-      $("#spongeDB").click(function() {
-        $.post('/admin/spongeDB', function(data) {
-          $.blockUI({message: "<h3>" + data.msg + "</h3>"});
-          setTimeout(function() {
-            $.unblockUI();
-          }, 3000);
-        })
-      });
+    });
+}
 
+function addAdminFunctions() {
+    if (window.userlist[window.myname].isAdmin) {
+      $("#spongeDB").html("Sponge DB");
+      $("#spongeDB").addClass("buttE").removeClass("buttD");
+      $("#userName").html("&nbsp; | &nbsp;" +  window.myname + " (admin)");
+    } else {
+      $("#userName").text(window.myname);
+    }
+    $("#spongeDB").hover(function() {
+        $.getJSON("/admin/dbSize", function(data) {
+          $("#spongeDB").html("Sponge DB (" + data.size + ")");
+      });
+    });
+    $("#spongeDB").click(function() {
+      $.post('/admin/spongeDB', function(data) {
+        $.blockUI({message: "<h3>" + data.msg + "</h3>"});
+        setTimeout(function() {
+          $.unblockUI();
+        }, 2000);
+      })
     });
 }
 
@@ -98,4 +109,10 @@ function humanDuration(milliseconds) {
   var m = Math.floor(s / 60);
   
   return m + "m " + (s % 60) + "s"
+}
+
+function humanTime(timestamp) {  // Returns YYYY-MM-DD HH:MM in Local Time
+  var d = new Date(timestamp);
+  var tzoffset = new Date().getTimezoneOffset()*60*1000;
+  return new Date(d - tzoffset).toISOString().substr(0, 16).replace('T', ' ');
 }

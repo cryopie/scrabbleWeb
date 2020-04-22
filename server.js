@@ -89,22 +89,26 @@ var log = {
 };
 
 // Database //////////////////////////////////////////////////////////////////////
+function Game() {
+}
+util.inherits(Game, EventEmitter);
+
+function initDB() {
+  db.registerObject(Game);
+  db.registerObject(scrabble.Tile);
+  db.registerObject(scrabble.Square);
+  db.registerObject(scrabble.Board);
+  db.registerObject(scrabble.Rack);
+  db.registerObject(scrabble.LetterBag);
+}
 
 var db = new DB.DB(argv.workdir + "/" + argv.database);
+initDB();
 db.on('load', function() {
   log.info('Database loaded from ' + argv.database);
 });
 
-db.registerObject(scrabble.Tile);
-db.registerObject(scrabble.Square);
-db.registerObject(scrabble.Board);
-db.registerObject(scrabble.Rack);
-db.registerObject(scrabble.LetterBag);
-
-function makeKey() {
-  return crypto.randomBytes(8).toString('hex');
-}
-
+/*
 function joinProse(array)
 {
   var length = array.length;
@@ -117,7 +121,7 @@ function joinProse(array)
       return _.reduce(array.slice(1, length - 1), function (word, accu) { return word + ", " + accu }, array[0]) + " and " + array[length - 1];
   }
 }
-
+*/
 // Middleware //////////////////////////////////////////////////////////////
 
 var app = express();
@@ -168,12 +172,9 @@ app.use(function (req, res, next) {
 app.use(express.static(__dirname + '/client'));
 // Game //////////////////////////////////////////////////////////////////
 
-function Game() {
+function makeKey() {
+  return crypto.randomBytes(8).toString('hex');
 }
-
-util.inherits(Game, EventEmitter);
-
-db.registerObject(Game);
 
 Game.create = function(language, players, owner) {
   var game = new Game();
@@ -205,6 +206,7 @@ Game.create = function(language, players, owner) {
   game.pausedBy = players.map((player) => player.name);
   game.pausedWhy = "Waiting for players to join ... ";
   game.label = gamelabels.getRandomLabel();
+  game.chatHistory = []
   game.save();
   return game;
 }
@@ -236,10 +238,11 @@ Game.prototype.nuke = function() {
 }
 
 function patchUpFinishedGame(game) {
-  return;
+  return 
   var maxscore = 0;
   var winners = [];
   game.players.forEach(function(player) {
+    log.debug("Player: " + player.name + " Score: " + player.score);
     if (player.score > maxscore) {
       winners = [player.name];
       maxscore = player.score;
@@ -255,7 +258,7 @@ Game.load = function(key) {
   }
   if (!this.games[key]) {
     var game = db.get(key);
-    if (!game) {
+    if (game == null || Object.keys(game).length == 0) {
       return null;
     }
     patchUpFinishedGame(game);
@@ -304,7 +307,7 @@ Game.prototype.pauseGame = function(player, message) {
     return;
   }
   if (game.pausedBy.includes(player.name)) {
-    log.warn("Cannot pause twice");
+    log.warn("Cannot pause twice", game, player);
     return;
   }
   game.pausedBy.push(player.name);
@@ -327,21 +330,18 @@ Game.prototype.resumeGame = function(player) {
   }
   game.pausedBy = game.pausedBy.filter((x) => x != player.name);
   log.debug("Player resumed game", game, player);
+  // game.pauseDuration is cleared in finishTurn
   if (game.pausedBy.length == 0) { // Resume game.
-    if (game.turns.length == 0) {
-      if (!(game.startTime > 0)) {
-        game.startTime = Date.now();
-        game.pauseDuration = 0;
-      } else {
-        game.pauseDuration = (Date.now() - game.startTime);
-      }
-    } else {
+    if (game.startTime > 0) {
       game.pauseDuration += (Date.now() - game.pauseTime);
+    } else {
+      game.startTime = Date.now();
+      game.pauseDuration = 0;
     }
     game.pauseTime = 0;
     game.paused = false;
     game.pausedWhy = "";
-    log.debug("Game resumed", game);
+    log.debug("Game resumed after a pause of " + Math.abs(game.pauseDuration/1000) + " seconds", game);
   }
   game.save();
   game.notifyListeners('reload');
@@ -620,8 +620,6 @@ Game.prototype.finish = function(reason) {
   // Tally scores  
   var playerWithNoTiles;
   var pointsRemainingOnRacks = 0;
-  var winners = [];
-  var winningScore = 0;
   game.players.forEach(function(player) {
     var tilesLeft = false;
     var rackScore = 0;
@@ -641,19 +639,23 @@ Game.prototype.finish = function(reason) {
       }
       playerWithNoTiles = player;
     }
-    if (player.score >= winningScore) {
-      if (player.score > winningScore) {
-        winners = [];
-        winningScore = player.score;
-      }
-      winners.push(player.name);
-    }
   });
 
   if (playerWithNoTiles) {
     playerWithNoTiles.score += pointsRemainingOnRacks;
     playerWithNoTiles.tallyScore = pointsRemainingOnRacks;
   }
+
+  var winningScore = 0;
+  game.players.forEach(function(player) {
+     if (player.score >= winningScore) {
+      if (player.score > winningScore) {
+        game.winners = [];
+        winningScore = player.score;
+      }
+      game.winners.push(player.name);
+    }
+  });
 
   var endMessage = { reason: reason,
     players: game.players.map(function(player) {
@@ -707,7 +709,7 @@ function gameHandler(handler) {
     var game = Game.load(gameKey);
     if (!game) {
       console.log("Game " + req.params.gameKey + " does not exist");
-      res.send(404);
+      res.sendStatus(404);
     } else {
       handler(game, req, res);
     }
@@ -778,22 +780,30 @@ app.get("/game", function(req, res) {
 });
 
 app.get("/deleteGame/:gameKey", gameHandler(function(game, req, res) {
-  if (!game.finished) {
+  if (!game.finished && game.paused) {
     if (adminUsers.includes(req.username) || req.username == game.owner) {
-      game.nuke();
+      if (game.connections.length == 0) {
+        game.nuke();
+      } else {
+        log.warn("Deleting a game requires all outstanding Websocket connections to close", game);
+      }
+    } else {
+      log.warn("User '" + req.username + "'unauthorized to delete game", game)
     }
+  } else {
+    log.warn("Only finished games that are paused can be deleted.", game);
   }
   res.redirect("/games.html");
 }));
 
 app.post("/pauseGame/:gameKey", playerHandler(function(player, game, req, res) {
   game.pauseGame(player);
-  res.redirect("back"); // Refresh the screen
+  res.sendStatus(200);
 }));
 
 app.post("/resumeGame/:gameKey", playerHandler(function(player, game, req, res) {
   game.resumeGame(player);
-  res.redirect("back"); // Refresh the screen
+  res.sendStatus(200);
 }));
 
 app.post("/game", function(req, res) {
@@ -835,8 +845,8 @@ app.post("/admin/spongeDB", adminHandler(function(req, res) {
     res.send({msg: "Cannot sponge while there are " + ufgl + " unfininshed games"});
   }
   else {
-    db.sponge();
-    res.send({msg: "Done"})
+    ans = db.sponge();
+    res.send({msg: ans.message})
   }
 }));
 
@@ -948,10 +958,10 @@ io.sockets.on('connection', function (socket) {
       }
     })
     .on('message', function(message) {
-      if (this.game.chatHistory == null) {
-        this.game.chatHistory = [];
-      }
       this.game.chatHistory.push(message);
+      if (this.game.finished) {
+        this.game.save();
+      }
       this.game.notifyListeners('message', message);
     });
 });

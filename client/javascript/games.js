@@ -64,9 +64,8 @@ function populateGamesList() {
                       .map(function(player) { return player.key ; })
                 }, game.label)
             ),
-            TD(null, game.owner ),
-            TD(null, new Date(game.createTime).toLocaleDateString('en-IN', {hour: "2-digit",
-              minute: "2-digit"})),
+            TD(null, game.owner),
+            TD(null, humanTime(game.createTime)),
             TD(null, game.players.map(function(player) { 
               return appendChildNodes(
                 A(((window.myname == player.name || window.userlist[window.myname].isAdmin) ? 
@@ -82,7 +81,8 @@ function populateGamesList() {
             ),
             function() {
               var td_actions = TD(null);
-              if (!game.finished && (game.owner == window.myname || window.userlist[window.myname].isAdmin)) {
+              if (!game.finished && game.paused && 
+                (game.owner == window.myname || window.userlist[window.myname].isAdmin)) {
                   td_actions.append(A({class: 'linkE', href: '/deleteGame/' + game.key}, "Delete"));
               }
               return td_actions;
@@ -97,7 +97,6 @@ function populateGamesList() {
     $("#gameList").tablesorter({
       widthFixed: true, 
       debug: false,
-      dateFormat: "ddmmyy",
       sortList: [[2, "desc"]]
     });
   });

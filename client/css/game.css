@@ -98,17 +98,16 @@ div#log {
     overflow: auto;
 }
 
-div#log span.score {
-    padding-left: 0.5em;
+div#log .moveDetail {
+    margin-left: 3em;
+}
 
+div#log span.score {
+    padding-left: 1em;
 }
 
 div#scoreboard td.score {
     font-weight: bold;
-}
-
-div#log .moveDetail {
-    margin-left: 4em;
 }
 
 div#log > div {
