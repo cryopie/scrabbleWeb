@@ -239,17 +239,6 @@ Game.prototype.nuke = function() {
 
 function patchUpFinishedGame(game) {
   return 
-  var maxscore = 0;
-  var winners = [];
-  game.players.forEach(function(player) {
-    log.debug("Player: " + player.name + " Score: " + player.score);
-    if (player.score > maxscore) {
-      winners = [player.name];
-      maxscore = player.score;
-    }
-  })
-  game.winners = winners;
-  game.save();
 }
 
 Game.load = function(key) {

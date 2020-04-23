@@ -979,12 +979,8 @@ UI.prototype.updateRackSquare = function(square) {
       hoverClass: "dropActive",
       drop: function(event, jui) {
         ui.deleteCursor();
-        if (square.tile) {
-          fromSquare = ui.idToSquare($(jui.draggable).attr("id"));
-          ui.slideRackTiles(fromSquare, square);
-        } else {
-          ui.moveTile(ui.idToSquare($(jui.draggable).attr("id")), square);
-        }
+        fromSquare = ui.idToSquare($(jui.draggable).attr("id"));
+        ui.slideRackTiles(fromSquare, square);
       }
     });
 
@@ -1373,11 +1369,11 @@ UI.prototype.setCursor = function(square, direction) {
 
 UI.prototype.TakeBackTiles = function() {
   var ui = this;
-  var freeRackSquares = filter(function (square) { return !square.tile }, ui.rack.squares);
   function putBackToRack(tile) {
     if (tile.isBlank()) {
       tile.letter = ' ';
     }
+    var freeRackSquares = filter(function (square) { return !square.tile }, ui.rack.squares);
     var square = freeRackSquares.pop();
     square.tile = tile;
     ui.rack.tileCount++;

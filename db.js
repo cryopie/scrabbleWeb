@@ -56,7 +56,7 @@ DB.prototype.sponge = function() {
     fs.renameSync(db.path, newf);
     childprocess.execSync("gzip '" + newf + "'");
     fs.renameSync(filename, db.path);
-    db.reload();
+    db.dirty = dirty(db.path);
     console.log('DB Sponging finished');
     // return Promise((resolve) => 
   };
