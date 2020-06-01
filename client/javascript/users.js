@@ -14,7 +14,7 @@ function populateUserlist() {
         TH({'colspan': "4", 'id': "userListHdr"}, "List of users")
       ),
       TR(null,
-        TH(null, 'Username'),
+        TH(null, 'User (win/total)'),
         TH(null, 'Last seen'),
         TH({'style': "display: none;"}, 'Last seen date'),
         TH(null, 'IP')
@@ -30,7 +30,9 @@ function populateUserlist() {
             window.myname = username;
         }
         tbody.append(TR(null,
-            TD(userdata.me ? {'id': "me"} : null, username),
+            TD(userdata.me ? {'id': "me"} : null, 
+              username + (userdata.wins == null ? "" : " (" + userdata.wins + "/" + userdata.plays + ")")
+            ),
             TD(null, dateDiffNow(new Date(userdata.lastseen))),
             TD({Style: "display: none"}, new Date(userdata.lastseen).toLocaleString()),
             TD(null, userdata.lastip)
@@ -107,8 +109,9 @@ function humanDuration(milliseconds) {
   }
   var s = Math.round(milliseconds / 1000);
   var m = Math.floor(s / 60);
-  
-  return m + "m " + (s % 60) + "s"
+  var s = s % 60;
+ 
+  return m + "m" + (s > 0 ? " " + s + "s": "")
 }
 
 function humanTime(timestamp) {  // Returns YYYY-MM-DD HH:MM in Local Time

@@ -39,7 +39,6 @@ DB.prototype.set = function(key, object) {
 
 DB.prototype.nuke = function(key) {
   this.dirty.set(key, {});
-  this.dirty.close();
   this.reload();
 }
 

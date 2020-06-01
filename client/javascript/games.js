@@ -3,7 +3,7 @@ $(document).ready(function() {
   registerLocalStorageToggle("#finishedGames", "fininshed games", "yes");
   var req = populateUserlist();
   req.success(function(resp){ 
-    window.setInterval(populateUserlist, 5000);
+    window.setInterval(populateUserlist, 30* 1000);
     populateGamesList();
   });
 });

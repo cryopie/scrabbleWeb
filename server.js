@@ -106,22 +106,9 @@ var db = new DB.DB(argv.workdir + "/" + argv.database);
 initDB();
 db.on('load', function() {
   log.info('Database loaded from ' + argv.database);
+  updateStats();
 });
 
-/*
-function joinProse(array)
-{
-  var length = array.length;
-  switch (length) {
-    case 0:
-      return "";
-    case 1:
-      return array[0];
-    default:
-      return _.reduce(array.slice(1, length - 1), function (word, accu) { return word + ", " + accu }, array[0]) + " and " + array[length - 1];
-  }
-}
-*/
 // Middleware //////////////////////////////////////////////////////////////
 
 var app = express();
@@ -134,8 +121,9 @@ app.use(errorhandler({
   showStack: true
 }));
 
-// Users and Auth //////////////////////////////////////////////////////////
+// Users, auth, stats, utilities //////////////////////////////////////////////////
 var userlist = {};
+var userstats = {};
 var adminUsers = config.adminUsers.split(",").map(function(x) { return x.trim(); });
 
 app.use(function (req, res, next) {
@@ -170,15 +158,59 @@ app.use(function (req, res, next) {
 });
 
 app.use(express.static(__dirname + '/client'));
-// Game //////////////////////////////////////////////////////////////////
 
 function makeKey() {
   return crypto.randomBytes(8).toString('hex');
 }
 
-Game.create = function(language, players, owner) {
+function updateStats() {
+  // Clean it up
+  for (var x in userstats) {
+    delete userstats[x];
+  }
+  // Go through every game
+  var games = db.all();
+  for (i = 0; i < games.length; i++) {
+    var game = games[i];
+    if (!game.finished) {
+      continue
+    }
+    game.players.forEach(function(player) {
+      // Init stats for player
+      if (!(player.name in userstats)) {
+        userstats[player.name] = { 
+          wins: 0,
+          plays: 0 
+        }
+      }
+      // Game specific stats
+      userstats[player.name].plays += 1;
+    })
+    // Win stats
+    game.winners.forEach(function(winner) {
+      userstats[winner].wins += 1;
+    })
+  }
+  log.info("Stats loaded");
+}
+
+function shuffle(array) {
+  var currentIndex = array.length, temporaryValue, randomIndex;
+  while (0 !== currentIndex) {
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex -= 1;
+    temporaryValue = array[currentIndex];
+    array[currentIndex] = array[randomIndex];
+    array[randomIndex] = temporaryValue;
+  }
+  return array;
+}
+
+// Game //////////////////////////////////////////////////////////////////
+Game.create = function(language, gametimelimit, players, owner) {
   var game = new Game();
   game.language = language;
+  game.gametimelimit = gametimelimit * 60 * 1000;
   game.players = players;
   game.key = makeKey();
   game.letterBag = scrabble.LetterBag.create(language);
@@ -576,29 +608,10 @@ Game.prototype.finishTurn = function(player, newTiles, turn) {
     game.connections.forEach(function (socket) {
       socket.emit('gameEnded', endMessage);
     });
+    updateStats();
   }
 
   return { newTiles: newTiles };
-}
-
-Game.prototype.createFollowonGame = function(startPlayer, owner) {
-  if (this.nextGameKey) {
-    throw 'followon game already created: old ' + this.key + ' new ' + this.nextGameKey;
-  }
-  var oldGame = this;
-  var playerCount = oldGame.players.length;
-  var newPlayers = [];
-  for (var i = 0; i < playerCount; i++) {
-    var oldPlayer = oldGame.players[(i + startPlayer.index) % playerCount];
-    newPlayers.push({ name: oldPlayer.name,
-      key: oldPlayer.key });
-  }
-  var newGame = Game.create(oldGame.language, newPlayers, owner);
-  oldGame.endMessage.nextGameKey = newGame.key;
-  oldGame.save();
-  newGame.save();
-
-  oldGame.notifyListeners('nextGame', newGame.key);
 }
 
 Game.prototype.finish = function(reason) {
@@ -733,6 +746,13 @@ app.get("/title", function(req, res) {
 
 app.get("/userlist", function(req, res) {
   ans = JSON.parse(JSON.stringify(userlist));
+  for (const username in ans) {
+    val = ans[username];
+    if (username in userstats) {
+      val.wins = userstats[username].wins;
+      val.plays = userstats[username].plays;
+    }
+  }
   ans[req.username].me = true;
   res.send(ans);
 });
@@ -795,11 +815,14 @@ app.post("/resumeGame/:gameKey", playerHandler(function(player, game, req, res) 
   res.sendStatus(200);
 }));
 
-app.post("/game", function(req, res) {
+app.post("/newGame", function(req, res) {
   var players = [];
-  [1, 2, 3, 4].forEach(function (x) {
+  var playerOrder = [1, 2, 3, 4];
+  if (req.body.randomizeorder == "Yes") {
+    playerOrder = shuffle(playerOrder);
+  }
+  playerOrder.forEach(function (x) {
     var name = req.body['name' + x];
-    //console.log('name', name, 'params', req.params);
     if (name) {
       players.push({ name: name,
         key: makeKey() });
@@ -809,9 +832,7 @@ app.post("/game", function(req, res) {
   if (players.length < 2) {
     throw 'at least two players must participate in a game';
   }
-
-  var game = Game.create(req.body.language || 'English', players, req.username);
-
+  var game = Game.create(req.body.language || 'English', req.body.gametimelimit || 0, players, req.username);
   res.redirect("/games.html");
 });
 
@@ -848,8 +869,9 @@ app.get("/game/:gameKey", gameHandler(function (game, req, res, next) {
   var thisPlayer = game.lookupPlayer(req, true);
   req.negotiate({
     'application/json': function () {
-      var response = { 
+      var response = {
         key: game.key,
+        label: game.label,
         board: game.board,
         turns: game.turns,
         paused: game.paused,
@@ -859,6 +881,7 @@ app.get("/game/:gameKey", gameHandler(function (game, req, res, next) {
         pauseDuration: game.pauseDuration,
         finished: game.finished,
         language: game.language,
+        gametimelimit: game.gametimelimit,
         whosTurn: game.whosTurn,
         chatHistory: game.chatHistory,
         duration: game.duration,
@@ -904,9 +927,6 @@ app.post("/game/:gameKey", playerHandler(function(player, game, req, res) {
     case 'challenge':
     case 'takeBack':
       tilesAndTurn = game.challengeOrTakeBackMove(req.body.command, player);
-      break;
-    case 'newGame':
-      game.createFollowonGame(player, req.username);
       break;
     default:
       throw 'unrecognized game PUT command: ' + body.command;

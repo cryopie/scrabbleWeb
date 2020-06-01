@@ -34,13 +34,12 @@ div.bottomShade table
     color: white;
 }
 
-span#whosturn {
+span#whosturn, span#nameOfTheGame {
     color: black;
-    padding: 5px 3px;
+    padding: 1px 2px;
     text-align: center;
     font-weight: bold;
     display: inline-block;
-    float: right;
 }
 
 div#wordlists
@@ -94,7 +93,7 @@ div#controls > div
 }
 
 div#log {
-    height: 10em;
+    height: 7em;
     overflow: auto;
 }
 
@@ -119,11 +118,12 @@ div#log > div > div {
 }
 
 div#scoreboard {
-    min-height: 4em;
+    font-size: 0.9em;
+    min-height: 3em;
 }
 
 div#scoreboard td {
-    padding: 1px 7px 1px 7px;
+    padding: 1px 3px 1px 3px;
 }
 
 div#scoreboard td.online {

@@ -1,7 +1,7 @@
 $(document).ready(function() {
     var req = populateUserlist();
     req.success( function(resp) { 
-      window.setInterval(populateUserlist, 2000);
+      window.setInterval(populateUserlist, 10 * 1000);
       $('input').attr('autocomplete', 'off');
       $('input.name')
           .autocomplete({

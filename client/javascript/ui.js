@@ -46,9 +46,16 @@ function UI(game) {
     ui.remainingTileCounts  = gameData.remainingTileCounts;
     ui.duration = gameData.duration;
     ui.pauseDuration = gameData.pauseDuration;
-    ui.paused = gameData.paused;
     ui.startTime = gameData.startTime;
     ui.finished = gameData.finished;
+    ui.paused = gameData.paused;
+    ui.gametimelimit = gameData.gametimelimit;
+    ui.maxplayerDuration = ui.gametimelimit / ui.players.length;
+
+    $("#nameOfTheGame").text(gameData.label);
+    if (ui.gametimelimit > 0) {
+      $("#nameOfTheGame").text(gameData.label + " (" + humanDuration(ui.gametimelimit) + ")")
+    }
 
     var playerNumber = 0;
     $('#scoreboard')
@@ -73,9 +80,11 @@ function UI(game) {
             TD({ 'class': 'remainingTiles' }, ''),
             TD({ 'class': 'status offline' }, '\u25cf'),
             player.scoreElement = TD({ 'class': 'score' }, player.score),
-            player.durationElement = TD({ 'class': 'duration' }, "")
+            player.durationElement = TD({ 'class': 'duration' }, ""),
+            player.remainingTime = TD({ 'class': 'remainingTime' }, "")
           );
-        })))
+        }))
+      )
       .append(DIV({ id: 'letterbagStatus' }));
 
     ui.drawBoard();
@@ -180,24 +189,6 @@ function UI(game) {
       ui.gameTime = gameDuration;
     }
 
-    function displayNextGameMessage(nextGameKey) {
-      if (nextGameKey) {
-        $('#log')
-          .append(DIV({ 'class': 'nextGame' },
-            A({ href: '/game/' + nextGameKey + '/' + $.cookie(ui.gameKey)}, "next game")));
-        $('#makeNextGame').remove();
-      } else {
-        var makeNextGameButton = BUTTON(null, "Make new game");
-        $(makeNextGameButton)
-          .on('click', function() {
-            ui.sendMoveToServer('newGame', null);
-          });
-        $('#log')
-          .append(DIV({ 'id': 'makeNextGame' },
-            'Click ', makeNextGameButton, ' if you want to play the same language and opponents again'));
-      }
-    }
-
     function displayEndMessage(endMessage) {
       var winners;
       for (var i in ui.players) {
@@ -234,7 +225,6 @@ function UI(game) {
             return youHaveWon ? 'you' : player.name
           }))
           + (((winners.length == 1) && !youHaveWon) ? ' has ' : ' have ') + 'won'));
-      displayNextGameMessage(endMessage.nextGameKey);
     }
 
     function placeTurnTiles(turn) {
@@ -265,7 +255,8 @@ function UI(game) {
     }
 
     $('#log').append(DIV({ 'class': 'gameStart' },
-      gameData.language + ' game started'));
+      gameData.language + " game '" + gameData.label + "' started"
+    ));
     gameData.turns.map(appendTurnToLog);
 
     if (gameData.endMessage) {
@@ -391,9 +382,6 @@ function UI(game) {
         displayEndMessage(endMessage);
         ui.notify('Game over!', 'Your game is over...');
       })
-      .on('nextGame', function (nextGameKey) {
-        displayNextGameMessage(nextGameKey);
-      })
       .on('message', function (message) {
         onChatMessage(message, true);
       })
@@ -456,6 +444,7 @@ function UI(game) {
         overlayCSS: {opacity: 0.90}
       });
     }
+    ui.playAudio("pageload");
   }); // end $.get("/game/:gameKey")
 
   // Default key presses
@@ -464,16 +453,20 @@ function UI(game) {
       ui.clearCursor();
     })
     .bind('change', function() {
-      ui.socket.emit('message', { name: ui.thisPlayer.name,
-        text: $(this).val() });
+      var message = $.trim($(this).val());
+      if (message.length > 0) {
+        ui.socket.emit('message', { name: ui.thisPlayer.name, text: message });
+      }
       $(this).val('');
     });
 
   $(document).on('keydown', function (event) {  
     if (ui.cursor) { return; } // If cursor is focused, we don't handle it
-    if (event.key == " ") {
-      if (event.target.id != 'messageInputBox') {
+    if (event.target.id != 'messageInputBox') {
+      if (event.key == " ") {
         $("#messageInputBox").focus();
+      } else if (event.key == "s") {
+        ui.Shuffle();
       }
     }
   });
@@ -610,18 +603,28 @@ UI.prototype.runClock = function() {
   $("#gameTime").text("Game: " + humanDuration(ui.gameTime));
   $("#turnTime").text("Turn: " + humanDuration(ui.turnTime));
   for (i = 0; i < ui.players.length; i++) {
+    // Set turn, and duration
     var player = ui.players[i];
-    playerDuration = player.duration + (i == ui.whosTurn ? ui.turnTime : 0);
+    var playerDuration = player.duration + (i == ui.whosTurn ? ui.turnTime : 0);
+    if (ui.gametimelimit > 0) { 
+      var remainingTime = (ui.gametimelimit / ui.players.length) - playerDuration;
+      // console.log("i = " + i + " Remaining Time: " + humanDuration(remainingTime));
+      if (remainingTime < 0) { remainingTime = 0; }
+      if (remainingTime == 0) {
+        if (i == ui.playerNumber && i == ui.whosTurn && !ui.paused && !ui.finished) {
+          ui.socket.emit('message', { name: "SYSTEM", text: "Auto-passed " + player.name + "'s turn (time elapsed)"});
+          ui.pass();
+        }
+      }
+      $(player.remainingTime).text(humanDuration(remainingTime));
+    }
     $(player.durationElement).text(humanDuration(playerDuration));
     $(player.nameElement).css({
       'color': PlayerColors[i],
       'font-weight': (i == ui.whosTurn? '700' : 'normal')
     })
-    if (i == ui.whosTurn) {
-      $(player.nameElement).html("> " + player.name);
-    } else {
-      $(player.nameElement).html(player.name);
-    }
+    $(player.nameElement).html((i == ui.whosTurn ? "> " : "") + player.name);
+    // We have a max time for player
   }
   if (ui.paused || ui.finished) { return; }
   ui.gameTime += 1000;
@@ -766,6 +769,14 @@ UI.prototype.updateBoardSquare = function(square) {
           $(this).css({ opacity: 1 });
         }
       });
+      $(div).droppable({ // Replace a board-unlocked-tile with a rack-tile
+        hoverClass: "dropActive",
+        drop: function(event, jui) {
+          ui.deleteCursor();
+          fromSquare = ui.idToSquare($(jui.draggable).attr("id"));
+          ui.switchTiles(fromSquare, square);
+        }
+      });
     }
     if (square.tile.letter && square.tile.letter === "_") {
       square.tile.letter = "";
@@ -899,7 +910,7 @@ UI.prototype.slideRackTiles = function(fromSquare, toSquare) {
       }
     }
   }
-  sqs[from].placeTile(null); // Remove the tile from fromSquare
+  fromSquare.placeTile(null); // Remove the tile from fromSquare
   if (closestBlankId > to) { // Slide right
     for (i = closestBlankId; i > to; i--) {
       if ((i-1) != from) { // Ignore the fromSquare 
@@ -913,7 +924,7 @@ UI.prototype.slideRackTiles = function(fromSquare, toSquare) {
       }
     }
   }
-  sqs[to].placeTile(fromTile); // Place the tile in toSquare
+  toSquare.placeTile(fromTile); // Place the tile in toSquare
 }
 
 UI.prototype.updateRackSquare = function(square) {
@@ -1095,6 +1106,7 @@ UI.prototype.selectSquare = function(square) {
 };
 
 UI.prototype.moveTile = function(fromSquare, toSquare) {
+  // fromSquare must have a tile. toSquare must be empty.
   var tile = fromSquare.tile;
   var ui = this;
   fromSquare.placeTile(null);
@@ -1134,6 +1146,19 @@ UI.prototype.moveTile = function(fromSquare, toSquare) {
     setTimeout(function () { ui.updateGameStatus() }, 100);
   }
 };
+
+UI.prototype.switchTiles = function(fromSquare, toSquare) {
+  // Both fromSquare and toSquare have tiles. Switch them.
+  var toTile = toSquare.tile;
+  toSquare.placeTile(null);
+  toSquare.owner.tileCount--;
+  ui.moveTile(fromSquare, toSquare);
+  if (toTile.isBlank()) {
+    toTile.letter = ' ';
+  }
+  fromSquare.placeTile(toTile);
+  fromSquare.owner.tileCount++;
+}
 
 UI.prototype.updateGameStatus = function() {
   $('#move').empty();

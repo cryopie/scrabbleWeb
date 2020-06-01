@@ -32,7 +32,7 @@
   </head>
   <body id="body">
     <div>
-        <form id="create-game" action="game" method="POST">
+        <form id="create-game" action="/newGame" method="POST">
         <fieldset>
             <h3>
                 <a class="linkE" href="/">Home</a>
@@ -42,9 +42,9 @@
             </h3>
             <div class="floatLeft">
                 <fieldset>
-                <legend>Language</legend>
+                <span>Langauge: </span>
                 <select name="language">
-                    <option>English</option>
+                    <option selected="selected">English</option>
                     <option>German</option>
                     <option>Czech</option>
                     <option>Estonian</option>
@@ -53,22 +53,46 @@
                     <option>Test</option>
                     <option>Nederlands</option>
                 </select>
+                <br/>
+                <span>Total game time in minutes (0 = no limit): </span>
+                <select name="gametimelimit">
+                    <option>0</option>
+                    <option>30</option>
+                    <option>35</option>
+                    <option>40</option>
+                    <option>45</option>
+                    <option selected="selected">50</option>
+                    <option>55</option>
+                    <option>60</option>
+                    <option>65</option>
+                    <option>70</option>
+                    <option>75</option>
+                    <option>80</option>
+                    <option>85</option>
+                    <option>90</option>
+                </select>
+                <br/>
+                <span>Randomize player order: </span>
+                <select name="randomizeorder">
+                    <option selected="selected">Yes</option>
+                    <option>No</option>
+                </select>
                 </fieldset>
                 <fieldset>
-                <legend>Player 1</legend>
-                <label for="name1">Name</label><input class="name" name="name1"/><br/>
+                    <label for="name1">Player 1: </label>
+                    <input class="name" name="name1"/><br/>
                 </fieldset>
                 <fieldset>
-                <legend>Player 2</legend>
-                <label for="name2">Name</label><input class="name" name="name2"/><br/>
+                    <label for="name2">Player 2 </label>
+                    <input class="name" name="name2"/><br/>
                 </fieldset>
                 <fieldset>
-                <legend>Player 3</legend>
-                <label for="name3">Name</label><input class="name" name="name3"/><br/>
-                </fieldset>
+                    <label for="name3">Player 3: </label>
+                    <input class="name" name="name3"/><br/>
+                </fieldset> 
                 <fieldset>
-                <legend>Player 4</legend>
-                <label for="name4">Name</label><input class="name" name="name4"/><br/>
+                    <label for="name4">Player 4: </label>
+                    <input class="name" name="name4"/><br/>
                 </fieldset>
                 <button name="create" type="submit">Create new game</button>
             </div>

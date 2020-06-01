@@ -53,13 +53,17 @@
   <body id="body">
     <audio id="yourturn" src="audio/yourturn.wav" preload="auto" type="audio/wav"></audio>
     <audio id="applause" src="audio/applause.wav" preload="auto" type="audio/wav"></audio>
+    <audio id="pageload" src="audio/pageload.wav" preload="auto" type="audio/wav"></audio>
     
     <div id="container">
       <div id="controls">
         <div id="actions">
             <a href="/">Home</a>
             <button class="buttE" id="pauseGame">Pause</button>
-            <span id="whosturn"></span>
+        </div>
+        <div id="info">
+            <span id="nameOfTheGame"></span>
+            <span id="whosturn" style="float: right"></span>
         </div>
         <div id="clock">
             <b>
